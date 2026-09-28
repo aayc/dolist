@@ -82,9 +82,17 @@ extension SQLiteWorkspaceIndex: WorkspaceStorageControlStore {
       try transaction {
         guard
           var request: DocumentDownloadRequest = try read("document_download_requests", key: path),
-          request.state == .requested,
+          request.state == .requested || request.state == .attempting,
           let scope: WorkspaceScope = try read("metadata", keyColumn: "key", key: "scope")
         else { throw WorkspaceStorageError.staleDownload }
+        // A resumed worker receives a fresh ticket. Any completion from the suspended worker
+        // must fail, even if it later reads the same document revision.
+        if request.state == .attempting {
+          request = DocumentDownloadRequest(
+            id: UUID(), path: request.path,
+            maxBytes: request.maxBytes, state: .requested,
+            requestedAt: request.requestedAt, updatedAt: at)
+        }
         request.state = .attempting
         request.updatedAt = at
         try put("document_download_requests", key: path, value: request)

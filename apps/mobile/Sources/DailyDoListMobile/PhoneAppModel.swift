@@ -23,13 +23,24 @@ final class PhoneAppModel {
   @ObservationIgnored private let privacyShield = PhonePrivacyShield()
   @ObservationIgnored private let credentials: KeychainConnectionCredentials
   @ObservationIgnored private let root: URL
+  @ObservationIgnored private let defaults: UserDefaults
+  @ObservationIgnored private let workspaceFactory:
+    (@MainActor (ConnectionProfile) async throws -> PhoneWorkspace)?
   @ObservationIgnored private var selection: UInt64 = 0
   @ObservationIgnored private var started = false
   @ObservationIgnored private var workspaces: [UUID: PhoneWorkspace] = [:]
 
-  init() {
-    root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+  init(
+    rootDirectory: URL? = nil, defaults: UserDefaults = .standard,
+    workspaceFactory: (@MainActor (ConnectionProfile) async throws -> PhoneWorkspace)? = nil,
+    installIntegrations: Bool = true
+  ) {
+    root =
+      rootDirectory
+      ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
       .appendingPathComponent("DailyDoList", isDirectory: true)
+    self.defaults = defaults
+    self.workspaceFactory = workspaceFactory
     let profiles = FileConnectionProfileStore(directory: root)
     credentials = KeychainConnectionCredentials()
     connection = MobileConnection(profiles: profiles, credentials: credentials) {
@@ -62,14 +73,21 @@ final class PhoneAppModel {
       self.workspace?.receive(item)
       self.receiveNotificationEvent(item)
     }
-    installPhoneIntegrations(profiles: profiles, credentials: credentials, rootDirectory: root)
+    if installIntegrations {
+      installPhoneIntegrations(profiles: profiles, credentials: credentials, rootDirectory: root)
+    }
   }
 
   func start() async {
     guard !started else { return }
     started = true
     await connection.loadProfiles()
-    if let saved = UserDefaults.standard.string(forKey: "selectedConnection"),
+    for profile in connection.profiles {
+      do { _ = try await finishRetiredConnection(profile) } catch {
+        self.error = error.localizedDescription
+      }
+    }
+    if let saved = defaults.string(forKey: "selectedConnection"),
       let profile = connection.profiles.first(where: { $0.id.uuidString == saved })
     {
       await select(profile)
@@ -79,24 +97,85 @@ final class PhoneAppModel {
   func select(_ profile: ConnectionProfile) async {
     selection &+= 1
     let epoch = selection
+    do { if try await finishRetiredConnection(profile) { return } } catch {
+      if epoch == selection { self.error = error.localizedDescription }
+      return
+    }
+    guard epoch == selection else { return }
     await connection.stop()
     guard epoch == selection else { return }
     await workspace?.checkpointAll()
     guard epoch == selection else { return }
-    UserDefaults.standard.set(profile.id.uuidString, forKey: "selectedConnection")
+    // Construction can fail for a locked, corrupted or future offline index. Never expose the
+    // previous editor under a newly selected profile or reroute Siri before this succeeds.
+    workspace = nil
     if profile.workspaceID != nil, profile.hostID != nil {
       do {
         let next = try await workspace(for: profile)
         guard epoch == selection else { return }
-        workspace = next
         await next.hydrate()
         guard epoch == selection else { return }
-      } catch { self.error = error.localizedDescription }
-    } else {
-      workspace = nil
+        workspace = next
+      } catch {
+        if epoch == selection { self.error = error.localizedDescription }
+        return
+      }
     }
     guard epoch == selection else { return }
+    defaults.set(profile.id.uuidString, forKey: "selectedConnection")
     await connection.select(profile)
+  }
+
+  func forget(_ scope: WorkspaceScope, proof: VerifiedRecoveryExport?) async throws {
+    guard let target = workspaces[scope.profileID], target.repository.scope == scope,
+      connection.selected?.id == scope.profileID
+    else {
+      throw WorkspaceRepositoryError.workspaceMismatch
+    }
+    selection &+= 1
+    let epoch = selection
+    await connection.stop()
+    try await target.prepareRecoveryExport()
+    guard epoch == selection, connection.selected?.id == scope.profileID else {
+      throw WorkspaceRepositoryError.connectionChanged
+    }
+    if let proof {
+      try await target.recovery.forget(afterExport: proof)
+    } else {
+      try await target.recovery.forget()
+    }
+    // Profile identities cannot change after adoption (FileConnectionProfileStore); one
+    // profile therefore owns exactly this protected namespace, including after re-pairing.
+    workspaces[scope.profileID] = nil
+    if workspace?.profile.id == scope.profileID { workspace = nil }
+    do { _ = try await finishRetiredConnection(target.profile) } catch {
+      self.error = error.localizedDescription
+      throw error
+    }
+    if defaults.string(forKey: "selectedConnection") == scope.profileID.uuidString {
+      defaults.removeObject(forKey: "selectedConnection")
+    }
+  }
+
+  /// A retired namespace is the durable record that the user already completed Forget. Finish
+  /// only that exact profile's remaining cleanup; an interrupted Keychain operation is retryable.
+  private func finishRetiredConnection(_ profile: ConnectionProfile) async throws -> Bool {
+    guard let workspaceID = profile.workspaceID, let hostID = profile.hostID else { return false }
+    let scope = WorkspaceScope(
+      profileID: profile.id, workspaceID: workspaceID,
+      hostID: hostID, origin: profile.origin)
+    let recovery = try WorkspaceRecovery(
+      rootDirectory: root.appendingPathComponent("workspaces"), scope: scope)
+    guard try await recovery.isRetired() else { return false }
+    try await recovery.forget()
+    try await connection.removeRetiredProfile(profile.id)
+    await integrations?.clearNotifications(for: scope)
+    workspaces[profile.id] = nil
+    if workspace?.profile.id == profile.id { workspace = nil }
+    if defaults.string(forKey: "selectedConnection") == profile.id.uuidString {
+      defaults.removeObject(forKey: "selectedConnection")
+    }
+    return true
   }
 
   func paired(_ profile: ConnectionProfile) async {
@@ -123,6 +202,12 @@ final class PhoneAppModel {
 
   private func workspace(for profile: ConnectionProfile) async throws -> PhoneWorkspace {
     if let existing = workspaces[profile.id] { return existing }
+    if let workspaceFactory {
+      let created = try await workspaceFactory(profile)
+      if let existing = workspaces[profile.id] { return existing }
+      workspaces[profile.id] = created
+      return created
+    }
     guard let workspaceID = profile.workspaceID, let hostID = profile.hostID else {
       throw WorkspaceRepositoryError.invalidScope
     }

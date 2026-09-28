@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 struct PhoneAttachmentUploadsView: View {
   let online: Bool
+  var copyDestination: String? = nil
   let load: @MainActor () async throws -> [AttachmentUpload]
   let checkAgain: @MainActor () async throws -> Void
   let cancel: @MainActor (AttachmentUpload) async throws -> Void
@@ -77,6 +78,9 @@ struct PhoneAttachmentUploadsView: View {
           "Remove or replace its embed in the note before that note can sync. The cancelled original may be removed from this iPhone's cache."
         )
       } else {
+        if let copyDestination {
+          Text("Matching references in \(copyDestination) will use the new attachment.")
+        }
         Text(
           "This creates another attachment at a new path. The original upload remains in recovery history; no existing host file is overwritten."
         )
@@ -116,6 +120,7 @@ struct PhoneAttachmentUploadsView: View {
           selection = upload
           action = .importCopy
         }
+        .disabled(copyDestination == nil)
         .accessibilityIdentifier("attachments.copy.\(upload.id.uuidString)")
         .buttonStyle(.borderless)
       }

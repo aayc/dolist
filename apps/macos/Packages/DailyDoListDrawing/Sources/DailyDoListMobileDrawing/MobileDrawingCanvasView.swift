@@ -95,6 +95,7 @@
         hasLaidOut = true
         zoomToFit()
       }
+      controller?.applyPendingElementFocus()
       positionTextEditor()
     }
 

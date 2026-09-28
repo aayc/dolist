@@ -89,6 +89,7 @@ struct WorkspaceStorageMaintenanceTests {
         .drawingDependency) == true)
     let result = try await maintenance.trim(protecting: ["Open.md"])
     #expect(result.evictedPaths == ["Clean.md", "Keeper/NotPinned.md"])
+    #expect(try await maintenance.inventory(protecting: ["Open.md"]).usage.cachedBytes == 0)
     let collected = try await maintenance.collectGarbage()
     #expect(collected.removedFiles >= 3)
     #expect(!FileManager.default.fileExists(atPath: try files.fileURL(orphan).path))
@@ -121,7 +122,12 @@ struct WorkspaceStorageMaintenanceTests {
       rootDirectory: fixture.directory, scope: fixture.scope)
     #expect(
       try await restarted.inventory().downloads.first { $0.path == old.path }?.state == .attempting)
-    try await restarted.cancelDownload(old.path, id: old.id)
+    let resumed = try await restarted.beginDownload(old.path)
+    #expect(resumed.id != old.id)
+    await #expect(throws: WorkspaceStorageError.staleDownload) {
+      try await maintenance.failDownload(old, failure: .downloadFailed)
+    }
+    try await restarted.cancelDownload(old.path, id: resumed.id)
     _ = try await restarted.requestDownload(.folder("Folder"), paths: [old.path], maxBytes: 20)
     let next = try await restarted.beginDownload(old.path)
     let saved = try await repository.cache(

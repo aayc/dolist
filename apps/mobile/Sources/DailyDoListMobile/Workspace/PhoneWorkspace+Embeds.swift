@@ -28,6 +28,22 @@ extension PhoneWorkspace {
     host.drawingController = { [weak self] in self?.drawingSessions[$0]?.controller }
     host.onOpenDrawing = { [weak self] target in Task { await self?.openDrawing(target) } }
     host.onOpenLink = { [weak self] target in self?.openEditorLink(target, from: path) }
+    host.onPreviewLink = { [weak self] request in
+      guard let self, self.generation == epoch else { return }
+      self.routedLink = PhoneLinkDestination(
+        request: PhoneNoteLinkRequest(link: request),
+        sourcePath: path, generation: epoch)
+    }
+    session.requiredAttachments = { [weak self] text in
+      guard let self else { throw WorkspaceRepositoryError.connectionChanged }
+      let targets = Set(
+        MobileMarkdownController.attachmentTargets(in: text).compactMap {
+          self.embedPath($0, from: path)
+        })
+      return try await self.attachmentUploads.uploads().filter {
+        targets.contains($0.path)
+      }.map(\.dependency)
+    }
     session.requiredDrawings = { [weak self] text in
       guard let self else { return [] }
       let paths = Set(
@@ -88,6 +104,9 @@ extension PhoneWorkspace {
   {
     guard let path = embedPath(target, from: note) else { return .missing }
     do {
+      if let pending = try await pendingAttachment(path), epoch == generation {
+        return .ready(pending)
+      }
       if let client, online {
         let ticket = try await contentCache.beginAttachmentFetch(path)
         do {
@@ -130,26 +149,39 @@ extension PhoneWorkspace {
   }
 
   func openEditorLink(_ target: EditorLinkPreview.Target, from note: String) {
+    Task { await followEditorLink(target, from: note) }
+  }
+
+  func followEditorLink(_ target: EditorLinkPreview.Target, from note: String) async {
     switch target {
     case .external(let url):
-      if LinkPolicy.isAllowed(url) { UIApplication.shared.open(url) }
+      if LinkPolicy.isAllowed(url) { await UIApplication.shared.open(url) }
     case .note(let target, let subpath):
       let path = target.isEmpty ? note : embedPath(target, from: note)
       guard let path else {
         error = "This linked note is not in the downloaded file list."
         return
       }
-      Task {
-        await open(path)
-        guard active?.note.path == path, let subpath else { return }
-        let lines = active?.editor.text.components(separatedBy: "\n") ?? []
-        let line = lines.firstIndex { value in
-          if subpath.hasPrefix("^") { return value.hasSuffix(subpath) }
-          return value.trimmingCharacters(in: CharacterSet(charactersIn: "# "))
-            .localizedCaseInsensitiveCompare(subpath) == .orderedSame
+      let epoch = generation
+      let request = navigation &+ 1
+      await open(path)
+      guard epoch == generation, navigation == request, let subpath else { return }
+      if let drawing = activeDrawing, drawing.drawing.path == path {
+        guard subpath.hasPrefix("^"), drawing.controller.focusElement(String(subpath.dropFirst()))
+        else {
+          error = "This drawing element is no longer available."
+          return
         }
-        if let line { revealLine(line) }
+        return
       }
+      guard active?.note.path == path else { return }
+      let lines = active?.editor.text.components(separatedBy: "\n") ?? []
+      let line = lines.firstIndex { value in
+        if subpath.hasPrefix("^") { return value.hasSuffix(subpath) }
+        return value.trimmingCharacters(in: CharacterSet(charactersIn: "# "))
+          .localizedCaseInsensitiveCompare(subpath) == .orderedSame
+      }
+      if let line { revealLine(line) }
     }
   }
 }

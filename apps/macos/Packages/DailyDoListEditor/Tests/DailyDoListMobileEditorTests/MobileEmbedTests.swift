@@ -20,12 +20,16 @@
       let controller = controller(source)
       var host = MobileEditorEmbedHost()
       host.loadDrawing = { _ in .missing }
+      host.onOpenLink = { _ in Issue.record("Embed controls must not open their hidden source link")
+      }
       controller.setEmbedHost(host, identity: "host/note")
       controller.input.layoutManager.ensureLayout(for: controller.input.textContainer)
       controller.embeds.layout()
       let card = try #require(
         controller.input.subviews.first { $0.accessibilityIdentifier == "note.embed" })
       #expect(card.frame.width > 300)
+      #expect(
+        controller.linkAtPoint(CGPoint(x: card.frame.maxX - 60, y: card.frame.maxY - 20)) == nil)
       let glyph = controller.input.layoutManager.glyphIndexForCharacter(at: source.utf16.count - 2)
       let next = controller.input.layoutManager.lineFragmentRect(
         forGlyphAt: glyph, effectiveRange: nil)
@@ -110,6 +114,46 @@
         EditorConfiguration(readableLineLength: false, showLineNumbers: false))
       #expect(controller.lineNumberGutter.superview == nil)
       #expect(controller.input.textContainerInset.left == 16)
+    }
+
+    @Test func insertingIntoTableKeepsTheWholeTableAndOneUndoRestoresSource() throws {
+      let table = "| Plant | Light |\n| --- | --- |\n| **Fern** | Shade |\n| Moss | Shade |"
+      let source = table + "\n\nAfter the table."
+      let controller = controller(source)
+      controller.selection = NSRange(
+        location: (source as NSString).range(of: "Fern").location, length: 0)
+      #expect(controller.insertAttachment(target: "attachments/garden.png"))
+      #expect(controller.text.hasPrefix(table + "\n\n![[attachments/garden.png]]\n\n"))
+      #expect(controller.text.hasSuffix("After the table."))
+      #expect(controller.content.index.tables.first?.last == 3)
+      controller.input.undoManager?.undo()
+      #expect(controller.text == source)
+    }
+
+    @Test func attachmentHiddenInsideTableHasNoOverlappingPreview() {
+      let controller = controller(
+        "| Plant | Light |\n| --- | --- |\n![[garden.png]]\n| Fern | Shade |\n\nAfter")
+      var host = MobileEditorEmbedHost()
+      host.loadAttachment = { _ in .unavailable }
+      controller.setEmbedHost(host, identity: "table-overlap")
+      controller.selection = NSRange(location: controller.text.utf16.count, length: 0)
+      controller.updatePreview()
+      let offset = (controller.text as NSString).range(of: "![[garden.png]]").location
+      #expect(controller.content.hiddenRange(at: offset) != nil)
+      #expect(!controller.embeds.draws(at: offset))
+    }
+
+    @Test func replacementChangesOnlyExactAttachmentTargetsAndUndoPreservesSource() {
+      let source =
+        "![[old.png|200|right-wrap]]\n![[other.png]]\n![old.png](<old.png> \"old.png\")\n[ordinary](old.png)\n\n```\n![[old.png]]\n```"
+      let controller = controller(source)
+      #expect(controller.replaceAttachment(target: "old.png", with: "new.png"))
+      #expect(
+        controller.text
+          == "![[new.png|200|right-wrap]]\n![[other.png]]\n![old.png](<new.png> \"old.png\")\n[ordinary](old.png)\n\n```\n![[old.png]]\n```"
+      )
+      controller.input.undoManager?.undo()
+      #expect(controller.text == source)
     }
 
     @Test func attachmentDecoderKeepsHostsSeparateAndPDFsStaticAndBounded() async throws {

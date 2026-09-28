@@ -35,6 +35,7 @@
     /// Upload returns the vault-relative target only after the host acknowledges persistence.
     public var importAttachment: ((Data, String, String) async throws -> String)?
     public var onOpenLink: ((EditorLinkPreview.Target) -> Void)?
+    public var onPreviewLink: ((EditorLinkPreview) -> Void)?
     public init() {}
   }
 #endif

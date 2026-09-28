@@ -7,18 +7,30 @@
     /// Follows a note or allowed external link at a source offset. The host decides navigation.
     @discardableResult
     public func openLink(atUTF16 offset: Int) -> Bool {
+      if let request = linkPreview(atUTF16: offset), let preview = embeds.host?.onPreviewLink {
+        preview(request)
+        return true
+      }
       guard let link = link(at: offset), let open = embeds.host?.onOpenLink else { return false }
       open(link.target)
       return true
     }
 
     func linkAtPoint(_ point: CGPoint) -> Int? {
-      guard configuration.livePreview, embeds.host?.onOpenLink != nil else { return nil }
+      guard configuration.livePreview,
+        embeds.host?.onOpenLink != nil || embeds.host?.onPreviewLink != nil
+      else { return nil }
       let location = CGPoint(
         x: point.x - input.textContainerInset.left, y: point.y - input.textContainerInset.top)
       let character = input.layoutManager.characterIndex(
         for: location, in: input.textContainer, fractionOfDistanceBetweenInsertionPoints: nil)
-      guard let link = link(at: character), !preview.isLineRevealed(containing: character) else {
+      // Replaced embed rows own their touch controls. Their hidden wiki source spans the
+      // whole preview rectangle, so treating it as a text link steals menu/resize taps.
+      let line = parser.lineIndex.line(containing: character)
+      guard content.hiddenRange(at: character) == nil, !parser.isEmbedLine(line),
+        !parser.attachmentLines.contains(line),
+        let link = link(at: character), !preview.isLineRevealed(containing: character)
+      else {
         return nil
       }
       let glyphs = input.layoutManager.glyphRange(

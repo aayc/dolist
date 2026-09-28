@@ -5,6 +5,18 @@ import Testing
 
 @Suite("Native content parsing and incremental boundaries")
 struct MarkdownContentTests {
+  @Test func backlinksResolveMarkdownWikiAliasesAndExcludeLiteralBlocks() {
+    let notes = [
+      "Other.md":
+        "[[Garden|plants]]\n[plants](Garden.md#Care)\nA Garden plan\nGardener\n```\n[[Garden]]\n```",
+      "Garden.md": "[[Garden]]",
+    ]
+    let mentions = EditorBacklinkIndex.mentions(
+      of: "Garden.md", notes: notes, paths: Array(notes.keys))
+    #expect(mentions.map(\.line) == [0, 1, 2])
+    #expect(mentions.map(\.kind) == [.linked, .linked, .unlinked])
+  }
+
   @Test func tableCellsFollowGFMSpacesEscapesAndAlignment() throws {
     let row = MarkdownContentLine.parse("| left \\| pipe | `a\\|b` | last |", literal: false)
     let cells = try #require(row.cells)

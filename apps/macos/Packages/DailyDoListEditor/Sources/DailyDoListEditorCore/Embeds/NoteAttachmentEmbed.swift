@@ -6,6 +6,7 @@ import Foundation
 package struct NoteAttachmentEmbed: Equatable {
   package var spec: DrawingEmbed
   package var markdown: Bool
+  package var targetRange: NSRange
 
   package static func isSupportedTarget(_ target: String) -> Bool {
     let decoded = target.removingPercentEncoding ?? target
@@ -21,13 +22,16 @@ package struct NoteAttachmentEmbed: Equatable {
 
   package static func parse(line: String) -> NoteAttachmentEmbed? {
     let source = line.trimmingCharacters(in: .whitespaces)
+    let start = (line as NSString).range(of: source).location
     if source.hasPrefix("![["), source.hasSuffix("]]"), source.count > 5 {
       let inner = String(source.dropFirst(3).dropLast(2))
       guard !inner.contains("[["), !inner.contains("]]"),
         let spec = DrawingEmbed.parse(inner: inner, isDrawing: true),
         isSupportedTarget(spec.target)
       else { return nil }
-      return NoteAttachmentEmbed(spec: spec, markdown: false)
+      let target = (source as NSString).range(of: spec.target)
+      return NoteAttachmentEmbed(
+        spec: spec, markdown: false, targetRange: target.shifted(by: start))
     }
     guard source.hasPrefix("!["), !source.hasPrefix("![[") else { return nil }
     let units = Array(source.utf16)
@@ -37,6 +41,9 @@ package struct NoteAttachmentEmbed: Equatable {
       link.range.location == 0, link.range.length == units.count,
       case .url(let target) = link.target, isSupportedTarget(target)
     else { return nil }
-    return NoteAttachmentEmbed(spec: DrawingEmbed(target: target), markdown: true)
+    guard let range = tokens.imageDestinationRanges.first else { return nil }
+    return NoteAttachmentEmbed(
+      spec: DrawingEmbed(target: target), markdown: true,
+      targetRange: range.shifted(by: start))
   }
 }

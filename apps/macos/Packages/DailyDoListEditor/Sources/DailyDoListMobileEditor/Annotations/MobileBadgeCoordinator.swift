@@ -54,6 +54,7 @@
         guard let self else { return }
         self.scheduled = false
         self.layout()
+        self.owner?.input.setNeedsDisplay()
       }
     }
 
@@ -64,7 +65,8 @@
       let input = owner.input
       let storage = input.textStorage
       let visible = store.items.filter {
-        !$0.badge.isFading && $0.badge.status != "idle" && $0.badge.status != "ignored"
+        owner.content.hiddenRange(at: $0.anchor) == nil && !$0.badge.isFading
+          && $0.badge.status != "idle" && $0.badge.status != "ignored"
       }
       let groups = Dictionary(grouping: visible, by: \.anchor)
       let height = max(36, UIFont.preferredFont(forTextStyle: .caption1).lineHeight + 16)

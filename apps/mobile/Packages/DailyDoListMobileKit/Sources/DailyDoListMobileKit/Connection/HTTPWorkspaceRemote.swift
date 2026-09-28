@@ -9,12 +9,15 @@ public struct HTTPWorkspaceRemote: WorkspaceRemote, CaptureRemote, StructuralRem
   public let origin: ConnectionOrigin
   private let workspaceID: String
   private let client: HTTPDaemonClient
+  private let noteDownloadLimit: Int?
 
-  public init(client: HTTPDaemonClient, scope: WorkspaceScope) throws {
+  public init(client: HTTPDaemonClient, scope: WorkspaceScope, noteDownloadLimit: Int? = nil) throws
+  {
     guard client.expectedWorkspaceId == scope.workspaceID,
       client.endpoint.baseURL == scope.origin.url
     else { throw WorkspaceRepositoryError.workspaceMismatch }
     self.client = client
+    self.noteDownloadLimit = noteDownloadLimit
     profileID = scope.profileID
     origin = scope.origin
     workspaceID = scope.workspaceID
@@ -34,7 +37,12 @@ public struct HTTPWorkspaceRemote: WorkspaceRemote, CaptureRemote, StructuralRem
 
   public func readNote(_ path: String) async throws -> RemoteNote? {
     do {
-      let note = try await client.readNote(path)
+      let note: NoteResponse
+      if let noteDownloadLimit {
+        note = try await client.readNote(path, maxBytes: noteDownloadLimit)
+      } else {
+        note = try await client.readNote(path)
+      }
       return RemoteNote(content: note.content, version: note.version)
     } catch let error as DaemonClientError where error.httpStatus == 404 {
       return nil

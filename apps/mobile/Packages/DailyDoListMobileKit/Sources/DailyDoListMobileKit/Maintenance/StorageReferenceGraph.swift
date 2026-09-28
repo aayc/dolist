@@ -30,11 +30,11 @@ struct StorageReferenceGraph {
       }
       let owned = Self.references(document)
       references.formUnion(owned)
-      if !reasons.isEmpty { protectedReferences.formUnion(owned) }
       if snapshot.selections.contains(where: { $0.contains(document.path) }) {
         reasons.insert(.pinned)
       }
       if activePaths.contains(document.path) { reasons.insert(.activeEditor) }
+      if !reasons.isEmpty { protectedReferences.formUnion(owned) }
       protections[document.path] = reasons
     }
     for attempt in snapshot.pending.compactMap(\.attempt) {

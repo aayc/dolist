@@ -23,6 +23,7 @@ final class NoteSession {
   @ObservationIgnored private var saveTask: Task<Void, Never>?
   @ObservationIgnored private var editableBeforeStructure: Bool?
   var onCheckpoint: (() -> Void)?
+  var requiredAttachments: ((String) async throws -> [AttachmentDependency])?
   var requiredDrawings: ((String) async -> [String])?
 
   init(note: LocalNote, repository: WorkspaceRepository) {
@@ -79,7 +80,6 @@ final class NoteSession {
     let sentRevision = revision
     let content = editor.text
     let expected = note.localRevision
-    let drawings = await requiredDrawings?(content)
     saving = true
     let task = Task { [self] in
       defer {
@@ -87,14 +87,17 @@ final class NoteSession {
         saveTask = nil
       }
       do {
+        let drawings = await requiredDrawings?(content)
+        let attachments = try await requiredAttachments?(content)
         let saved: LocalNote
         if requiresReview {
           saved = try await repository.saveForReview(
-            path: note.path, content: content, expectedRevision: expected)
+            path: note.path, content: content, expectedRevision: expected,
+            requiringDrawings: drawings, requiringAttachments: attachments)
         } else {
           saved = try await repository.save(
             path: note.path, content: content, expectedRevision: expected,
-            requiringDrawings: drawings)
+            requiringDrawings: drawings, requiringAttachments: attachments)
         }
         guard saved.localRevision >= note.localRevision else { return }
         note = saved
@@ -132,9 +135,12 @@ final class NoteSession {
     if merged.conflict {
       requiresReview = true
       do {
+        let drawings = await requiredDrawings?(merged.text)
+        let attachments = try await requiredAttachments?(merged.text)
         note = try await repository.saveForReview(
           path: incoming.path, content: merged.text,
-          expectedRevision: incoming.localRevision)
+          expectedRevision: incoming.localRevision, requiringDrawings: drawings,
+          requiringAttachments: attachments)
         requiresReview = false
         durableText = merged.text
         durableRevision = mergingRevision

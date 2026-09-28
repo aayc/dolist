@@ -55,28 +55,33 @@ extension PhoneWorkspace {
 
   func refreshDrawing(_ path: String, remote: HTTPWorkspaceRemote) async {
     let epoch = generation
-    do {
-      let existing = drawingSessions[path]
-      await existing?.checkpoint()
-      let drawing = try await drawingRepository.refresh(path: path, with: remote)
-      guard epoch == generation else { return }
-      if let drawing {
-        await existing?.adopt(drawing)
-      } else if let existing,
-        existing.hasUncheckpointedEdits || existing.controller.hasActiveInteraction
-      {
-        existing.controller.finishEditing()
-        let recovery = try await drawingRepository.createRecoveryDraft(
-          path: path, scene: existing.controller.scene, previous: existing.drawing.document)
-        existing.adoptRecovery(recovery)
-      } else {
-        drawingSessions[path] = nil
-        if activeDrawing?.drawing.path == path {
-          activeDrawing = nil
-          error = "This drawing was removed on the host."
-        }
+    do { try await refreshDrawingChecked(path, remote: remote) } catch {
+      if epoch == generation { self.error = error.localizedDescription }
+    }
+  }
+
+  func refreshDrawingChecked(_ path: String, remote: HTTPWorkspaceRemote) async throws {
+    let epoch = generation
+    let existing = drawingSessions[path]
+    await existing?.checkpoint()
+    let drawing = try await drawingRepository.refresh(path: path, with: remote)
+    guard epoch == generation else { return }
+    if let drawing {
+      await existing?.adopt(drawing)
+    } else if let existing,
+      existing.hasUncheckpointedEdits || existing.controller.hasActiveInteraction
+    {
+      existing.controller.finishEditing()
+      let recovery = try await drawingRepository.createRecoveryDraft(
+        path: path, scene: existing.controller.scene, previous: existing.drawing.document)
+      existing.adoptRecovery(recovery)
+    } else {
+      drawingSessions[path] = nil
+      if activeDrawing?.drawing.path == path {
+        activeDrawing = nil
+        error = "This drawing was removed on the host."
       }
-    } catch { if epoch == generation { self.error = error.localizedDescription } }
+    }
   }
 
   func showDrawing(_ drawing: LocalDrawing) {
@@ -92,15 +97,15 @@ extension PhoneWorkspace {
       for note in self.sessions.values { note.editor.drawingsDidChange() }
       Task { await self.synchronize() }
     }
-    session.controller.onOpenLink = { [weak self] link in
-      guard let self else { return }
+    session.controller.onOpenLink = { [weak self, weak session] link in
+      guard let self, let session else { return }
       if link.hasPrefix("[["), link.hasSuffix("]]") {
-        let target = String(link.dropFirst(2).dropLast(2))
-        if let path = WikiLinks.resolve(
-          target.components(separatedBy: "#")[0], in: self.entries.map(\.path))
-        {
-          Task { await self.open(path) }
-        }
+        let parts = String(link.dropFirst(2).dropLast(2)).split(
+          separator: "#", maxSplits: 1, omittingEmptySubsequences: false)
+        self.openEditorLink(
+          .note(
+            target: String(parts[0]),
+            subpath: parts.count > 1 ? String(parts[1]) : nil), from: session.drawing.path)
       } else if let url = URL(string: link), LinkPolicy.isAllowed(url) {
         UIApplication.shared.open(url)
       } else {

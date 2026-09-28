@@ -12,6 +12,7 @@
     public var onAgentMarkerTap: ((String?) -> Void)?
     public var onUserEdit: (() -> Void)?
     lazy var annotations = MobileBadgeCoordinator(owner: self)
+    lazy var content = MobileContentCoordinator(owner: self)
     public var badges: [EditorBadge] {
       annotations.store.currentBadges(lineIndex: parser.lineIndex)
     }
@@ -43,6 +44,18 @@
       glyphs = MobileGlyphDelegate(storage: input.textStorage, livePreview: preview, theme: style)
       glyphs.embedFragment = { [weak self] offset, rect in
         self?.embeds.fragment(at: offset, proposed: rect)
+      }
+      glyphs.contentRange = { [weak self] in self?.content.hiddenRange(at: $0) }
+      glyphs.contentFragment = { [weak self] in self?.content.fragment(at: $0, proposed: $1) }
+      content.onOpenAgentThread = { [weak self] in self?.onAgentMarkerTap?($0) }
+      (input.layoutManager as? MobileLayoutManager)?.contentRange = { [weak self] in
+        self?.content.hiddenRange(at: $0)
+      }
+      (input.layoutManager as? MobileLayoutManager)?.proseHighlights = { [weak self] in
+        guard let self else { return }
+        self.drawProseHighlights(forGlyphRange: $0, at: $1) {
+          self.content.hiddenRange(at: $0) != nil
+        }
       }
       preview.drawsEmbed = { [weak self] offset in self?.embeds.draws(at: offset) == true }
       input.layoutManager.delegate = glyphs
@@ -81,6 +94,7 @@
       input.textStorage.beginEditing()
       parser.rebuild(input.textStorage.mutableString, consume: applyStyle)
       input.textStorage.endEditing()
+      content.rebuild()
       input.textStorage.delegate = self
       selection = NSRange(location: 0, length: 0)
       input.undoManager?.removeAllActions()
@@ -104,6 +118,7 @@
       input.textStorage.beginEditing()
       parser.rebuild(input.textStorage.mutableString, consume: applyStyle)
       input.textStorage.endEditing()
+      content.rebuild()
       updatePreview()
     }
 
@@ -209,7 +224,9 @@
       let character = layout.characterIndex(
         for: location, in: input.textContainer,
         fractionOfDistanceBetweenInsertionPoints: nil)
-      guard character < input.textStorage.length else { return nil }
+      guard character < input.textStorage.length, content.hiddenRange(at: character) == nil else {
+        return nil
+      }
       var range = NSRange()
       guard
         let raw = input.textStorage.attribute(.ddlMarker, at: character, effectiveRange: &range)
@@ -230,7 +247,9 @@
         x: point.x - input.textContainerInset.left, y: point.y - input.textContainerInset.top)
       let character = layout.characterIndex(
         for: location, in: input.textContainer, fractionOfDistanceBetweenInsertionPoints: nil)
-      guard character < input.textStorage.length else { return nil }
+      guard character < input.textStorage.length, content.hiddenRange(at: character) == nil else {
+        return nil
+      }
       var range = NSRange()
       guard
         let raw = input.textStorage.attribute(.ddlMarker, at: character, effectiveRange: &range)
@@ -299,10 +318,26 @@
       lineNumberGutter.setNeedsDisplay()
       embeds.schedule()
       annotations.schedule()
+      content.schedule()
     }
   }
 
   extension MobileMarkdownController: UIGestureRecognizerDelegate {
+    public func gestureRecognizer(
+      _ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch
+    ) -> Bool {
+      var view = touch.view
+      while let current = view, current !== input {
+        if current is UIControl || current is MobileEmbedCard || current is MobileTableRowView
+          || current is MobileCalloutHeaderView
+        {
+          return false
+        }
+        view = current.superview
+      }
+      return true
+    }
+
     public func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
       // A recognizer over the whole text view prevents UIKit's caret/selection gestures even with
       // cancelsTouchesInView=false. Only participate when the user actually touched a checkbox.
@@ -322,6 +357,9 @@
         in: editedRange, changeInLength: delta, text: textStorage.mutableString,
         consume: { _, _, _, _ in }
       )
+      content.didEdit(
+        location: editedRange.location, oldLength: editedRange.length - delta,
+        newLength: editedRange.length)
       annotations.edited(
         location: editedRange.location, oldLength: editedRange.length - delta,
         newLength: editedRange.length)
@@ -362,6 +400,7 @@
       updateMobileGeometry()
       embeds.schedule()
       annotations.schedule()
+      content.schedule()
     }
     public func textViewDidChangeSelection(_ textView: UITextView) {
       updatePreview()

@@ -1,9 +1,9 @@
 # Recovery exports and connection removal
 
-`WorkspaceRecovery.export(to:)` publishes a complete recovery folder atomically. Format 2 contains
-plain Markdown files with generated collision-safe names and a `manifest.json`. Each file entry
+`WorkspaceRecovery.export(to:)` publishes a complete recovery folder atomically. Format 3 contains
+plain Markdown files, original attachment bytes with generated collision-safe names, and a `manifest.json`. Each file entry
 records its original path/context, SHA-256 and byte count. The manifest preserves frozen capture
-routing, structural intents, and typed pending agent requests with their original operation IDs,
+routing, typed attachment uploads, structural intents, and typed pending agent requests with their original operation IDs,
 payloads, scope and storage revision. Agent requests are recovery evidence; importing or opening
 an export must never replay them. Credentials are absent.
 

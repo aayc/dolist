@@ -6,6 +6,14 @@
   /// changed into attachments, so copy, selection and undo continue to use source positions.
   final class MobileLayoutManager: NSLayoutManager {
     var preview: LivePreviewState?
+    @MainActor var contentRange: ((Int) -> NSRange?)?
+    @MainActor var proseHighlights: ((NSRange, CGPoint) -> Void)?
+
+    override func drawBackground(forGlyphRange glyphs: NSRange, at origin: CGPoint) {
+      nonisolated(unsafe) let manager = self
+      MainActor.assumeIsolated { manager.proseHighlights?(glyphs, origin) }
+      super.drawBackground(forGlyphRange: glyphs, at: origin)
+    }
     override func drawGlyphs(forGlyphRange glyphsToShow: NSRange, at origin: CGPoint) {
       super.drawGlyphs(forGlyphRange: glyphsToShow, at: origin)
       nonisolated(unsafe) let manager = self
@@ -18,7 +26,8 @@
       let characters = characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
       storage.enumerateAttribute(.ddlMarker, in: characters) { value, range, _ in
         guard let value = value as? Int, let kind = MarkerKind(rawValue: value), kind.isReplacement,
-          preview.isHidden(kind, range: range), let rect = markerRect(at: range.location)
+          contentRange?(range.location) == nil, preview.isHidden(kind, range: range),
+          let rect = markerRect(at: range.location)
         else { return }
         let box = rect.offsetBy(dx: origin.x, dy: origin.y)
         switch kind {

@@ -27,6 +27,7 @@ final class PhoneWorkspace {
   let cache: WorkspaceCache
   let composerDrafts: PhoneComposerDrafts
   let captureOutbox: CaptureOutbox
+  let attachmentUploads: AttachmentUploadRepository
   var settings: AppSettings?
   var entries: [VaultEntry] = []
   var active: NoteSession?
@@ -36,6 +37,13 @@ final class PhoneWorkspace {
   var refreshing = false
   var error: String?
   var selectedTab = 0
+  var storageInventory: WorkspaceStorageInventory?
+  var contentInventory: [ContentCacheEntry] = []
+  var contentUsage: ContentCacheUsage?
+  var downloadingPath: String?
+  @ObservationIgnored var downloadTask: Task<Void, Never>?
+  @ObservationIgnored var downloadID: UUID?
+  @ObservationIgnored var downloadAgain = false
   var workingActivity: OrchestratorActivity?
   @ObservationIgnored var chipBoard = OrchestratorChipBoard()
   @ObservationIgnored var chipTimers: [String: Task<Void, Never>] = [:]
@@ -45,6 +53,7 @@ final class PhoneWorkspace {
   @ObservationIgnored var pendingPresence: (String, Int)?
   @ObservationIgnored var lastPresence: (String, Int)?
   var routedThread: PhoneThreadDestination?
+  var routedLink: PhoneLinkDestination?
   @ObservationIgnored var sessions: [String: NoteSession] = [:]
   @ObservationIgnored var offlineChannel: ConnectionChannel?
   @ObservationIgnored var client: HTTPDaemonClient?
@@ -76,6 +85,8 @@ final class PhoneWorkspace {
     self.cache = cache
     self.composerDrafts = PhoneComposerDrafts(cache: cache)
     self.captureOutbox = captureOutbox
+    self.attachmentUploads = try AttachmentUploadRepository(
+      rootDirectory: rootDirectory, scope: repository.scope)
     composerDrafts.onError = { [weak self] in self?.error = $0 }
   }
 
@@ -87,6 +98,7 @@ final class PhoneWorkspace {
       entries = try await cache.tree()?.value.entries ?? []
       includeLocalNotes(cached)
       includeLocalDrawings(try await drawingRepository.drawings())
+      includeAttachments(try await attachmentUploads.uploads())
       try await restoreNavigation()
       if active == nil, activeDrawing == nil, tabs.active == nil, let first = cached.first {
         show(first)
@@ -154,6 +166,7 @@ final class PhoneWorkspace {
       guard epoch == generation, online else { return }
       await agent?.refresh()
       scheduleAnnotations()
+      startDownloads()
     } catch {
       guard epoch == generation else { return }
       self.error = error.localizedDescription
@@ -166,6 +179,7 @@ final class PhoneWorkspace {
     await structural.invalidateConnection()
     await repository.invalidateConnection()
     await captureOutbox.invalidateConnection()
+    await attachmentUploads.invalidateConnection()
     await checkpointAll(finishComposition: true)
     await composerDrafts.flush()
     await agent?.flushContentCache()
@@ -174,9 +188,15 @@ final class PhoneWorkspace {
 
   func invalidateAuthority() {
     generation &+= 1
+    routedLink = nil
     online = false
     client = nil
     remote = nil
+    downloadTask?.cancel()
+    downloadTask = nil
+    downloadID = nil
+    downloadAgain = false
+    downloadingPath = nil
     synchronization?.cancel()
     synchronization = nil
     synchronizationID = nil
@@ -216,6 +236,7 @@ final class PhoneWorkspace {
     navigation &+= 1
     let request = navigation
     do {
+      active?.finishComposition()
       await active?.checkpoint()
       guard request == navigation else { return }
       if let session = sessions[path] {
@@ -268,6 +289,8 @@ final class PhoneWorkspace {
       entries = tree.entries
       includeLocalNotes(try await repository.notes())
       includeLocalDrawings(try await drawingRepository.drawings())
+      includeAttachments(try await attachmentUploads.uploads())
+      try await downloadNewPinnedPaths()
     } catch WorkspaceRepositoryError.concurrentWrite {
       // A newer fetch/event already won. Its snapshot is the one to display.
     } catch { if epoch == generation { self.error = error.localizedDescription } }
@@ -286,6 +309,7 @@ final class PhoneWorkspace {
           await structural.invalidateConnection()
           await repository.invalidateConnection()
           await captureOutbox.invalidateConnection()
+          await attachmentUploads.invalidateConnection()
         }
         return
       }
@@ -336,6 +360,7 @@ final class PhoneWorkspace {
       do {
         await checkpointAll()
         guard epoch == generation, !Task.isCancelled else { return }
+        try await syncAttachments(epoch: epoch)
         // Resolve any earlier note attempt before the capture barrier can send an append.
         do { try await syncNotes(remote, epoch: epoch) } catch WorkspaceRepositoryError
           .pendingCaptures
@@ -346,6 +371,7 @@ final class PhoneWorkspace {
         for capture in sent {
           if let path = capture.receipt?.note?.path { await refresh(path, remote: remote) }
         }
+        try await syncAttachments(epoch: epoch)
         try await syncNotes(remote, epoch: epoch)
       } catch WorkspaceRepositoryError.pendingCaptures {
         // An indeterminate capture intentionally holds ordinary writes until reviewed.
@@ -369,25 +395,30 @@ final class PhoneWorkspace {
 
   func refresh(_ path: String, remote: HTTPWorkspaceRemote) async {
     let epoch = generation
-    do {
-      let existing = sessions[path]
-      await existing?.checkpoint()
-      let note = try await repository.refresh(path: path, with: remote)
-      guard epoch == generation else { return }
-      if let note {
-        await sessions[path]?.adopt(note)
-      } else if let existing, existing.hasUncheckpointedEdits {
-        let recovery = try await repository.createRecoveryDraft(
-          path: path, content: existing.editor.text)
-        existing.adoptRecovery(recovery)
-      } else {
-        sessions[path] = nil
-        if active?.note.path == path {
-          active = nil
-          error = "This note was removed on the host."
-        }
+    do { try await refreshChecked(path, remote: remote) } catch {
+      if epoch == generation { self.error = error.localizedDescription }
+    }
+  }
+
+  func refreshChecked(_ path: String, remote: HTTPWorkspaceRemote) async throws {
+    let epoch = generation
+    let existing = sessions[path]
+    await existing?.checkpoint()
+    let note = try await repository.refresh(path: path, with: remote)
+    guard epoch == generation else { return }
+    if let note {
+      await sessions[path]?.adopt(note)
+    } else if let existing, existing.hasUncheckpointedEdits {
+      let recovery = try await repository.createRecoveryDraft(
+        path: path, content: existing.editor.text)
+      existing.adoptRecovery(recovery)
+    } else {
+      sessions[path] = nil
+      if active?.note.path == path {
+        active = nil
+        error = "This note was removed on the host."
       }
-    } catch { if epoch == generation { self.error = error.localizedDescription } }
+    }
   }
 
   func capture(_ text: String) async throws {

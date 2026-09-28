@@ -9,8 +9,13 @@ import SwiftUI
 struct PhoneWorkspaceView: View {
   let model: PhoneAppModel
   @Bindable var workspace: PhoneWorkspace
-  let chooseHost: () -> Void
+  let chooseHost: @MainActor () -> Void
+  var isRootCurrent: @MainActor () -> Bool = { true }
   @State private var capture = false
+  @State private var commandSettings = false
+  @State private var commandDrawing = false
+  @State private var commandDrawingName = ""
+  @State private var commandDrawingSession: NoteSession?
 
   var body: some View {
     TabView(selection: $workspace.selectedTab) {
@@ -29,6 +34,7 @@ struct PhoneWorkspaceView: View {
         .navigationTitle(workspace.activePath?.components(separatedBy: "/").last ?? "Today")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+          ToolbarItem(placement: .topBarLeading) { PhoneCommandMenu() }
           ToolbarItem(placement: .topBarLeading) {
             Button("Today", systemImage: "calendar") { Task { await workspace.openToday() } }
           }
@@ -83,9 +89,30 @@ struct PhoneWorkspaceView: View {
             ConnectionStatusView(connection: model.connection)
             Button("Choose a connection", action: chooseHost)
             NavigationLink("Host and shared settings") { hostSettings }
+            NavigationLink("Forget this connection") {
+              PhoneForgetConnectionView(
+                workspace: workspace,
+                prepare: { try await workspace.prepareRecoveryExport() },
+                forget: { scope, proof in try await model.forget(scope, proof: proof) })
+            }
           }
           Section("On this iPhone") {
+            NavigationLink("Downloads and storage") { PhoneDownloadsView(workspace: workspace) }
             NavigationLink("Notifications and Siri") { PhoneIntegrationSettingsView(model: model) }
+            NavigationLink("Attachments") {
+              PhoneAttachmentUploadsView(
+                online: workspace.online,
+                copyDestination: workspace.active?.note.path,
+                load: { try await workspace.attachmentUploads.uploads() },
+                checkAgain: { await workspace.synchronize() },
+                cancel: { upload in
+                  _ = try await workspace.attachmentUploads.cancel(
+                    upload.id, expectedRevision: upload.revision)
+                  for session in workspace.sessions.values { session.editor.attachmentsDidChange() }
+                },
+                original: { try await workspace.attachmentUploads.bytes($0) },
+                importCopy: { try await workspace.replaceAttachment($0, data: $1) })
+            }
             NavigationLink("Captures") { CaptureHistoryView(workspace: workspace) }
             NavigationLink("Recovery and pending actions") {
               PhoneRecoveryView(workspace: workspace)
@@ -144,6 +171,43 @@ struct PhoneWorkspaceView: View {
       }
     }
     .sheet(isPresented: $capture) { CaptureTaskView(workspace: workspace) }
+    .sheet(item: $workspace.routedLink) { destination in
+      PhoneNoteLinkPreview(model: workspace.linkPreview(destination)) { target in
+        guard workspace.isCurrentLink(destination) else { return }
+        workspace.routedLink = nil
+        workspace.openEditorLink(target, from: destination.sourcePath)
+      }
+    }
+    .sheet(isPresented: $commandSettings) {
+      NavigationStack {
+        hostSettings.toolbar {
+          ToolbarItem(placement: .cancellationAction) { Button("Done") { commandSettings = false } }
+        }
+      }
+    }
+    .alert("Insert drawing", isPresented: $commandDrawing) {
+      TextField("Drawing name", text: $commandDrawingName)
+      Button("Cancel", role: .cancel) { commandDrawingSession = nil }
+      Button("Create") {
+        guard let session = commandDrawingSession, workspace.active === session else { return }
+        let name = commandDrawingName
+        commandDrawingName = ""
+        commandDrawingSession = nil
+        Task { await workspace.insertDrawing(named: name, into: session) }
+      }.disabled(commandDrawingName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
+    .phoneCommands(
+      workspace: workspace,
+      isCurrent: {
+        model.workspace === workspace && isRootCurrent() && !capture && !commandSettings
+          && !commandDrawing && workspace.routedThread == nil && workspace.routedLink == nil
+      },
+      chooseConnection: chooseHost, showHostSettings: { commandSettings = true },
+      insertDrawing: {
+        commandDrawingSession = workspace.active
+        commandDrawing = true
+      },
+      visibleThread: { model.visibleThreads.first })
   }
   private var hostSettings: some View {
     let client = model.connection.client
@@ -164,22 +228,43 @@ struct PhoneWorkspaceView: View {
 private struct PhoneNoteView: View {
   let workspace: PhoneWorkspace
   let session: NoteSession
-  @State private var source = false
-  @State private var readOnly = false
+  @State private var backlinks = false
   @State private var newDrawing = false
   @State private var drawingName = ""
 
   var body: some View {
     VStack(spacing: 0) {
+      PhoneOrchestratorIndicator(
+        activity: workspace.workingActivity, currentPath: workspace.activePath,
+        online: workspace.online
+      ) { workspace.openAnnotationThread(nil, turn: $0) }
       HStack {
         Text(session.saveLabel).font(.caption).foregroundStyle(
           session.error == nil ? Color.secondary : Color.red)
         Spacer(minLength: 4)
+        PhoneAttachmentImportButton { data, filename in
+          try await workspace.importAttachment(data, filename: filename, into: session)
+        }
+        .labelStyle(.iconOnly)
+        .disabled(!session.editor.configuration.isEditable || workspace.structuralBusy)
         Menu("Editing options", systemImage: "ellipsis.circle") {
-          Toggle("Source mode", isOn: $source)
-          Toggle("Read only", isOn: $readOnly)
+          Toggle(
+            "Source mode",
+            isOn: Binding(
+              get: { !session.editor.configuration.livePreview },
+              set: { session.setSourceMode($0) }))
+          Toggle(
+            "Read only",
+            isOn: Binding(
+              get: { !session.editor.configuration.isEditable },
+              set: { value in
+                var configuration = session.editor.configuration
+                configuration.isEditable = !value
+                session.editor.updateConfiguration(configuration)
+              }))
+          Button("Backlinks", systemImage: "link") { backlinks = true }
           Button("Insert drawing", systemImage: "pencil.and.scribble") { newDrawing = true }
-            .disabled(readOnly)
+            .disabled(!session.editor.configuration.isEditable)
           Button("Undo", systemImage: "arrow.uturn.backward") { session.editor.run(.undo) }
           Button("Redo", systemImage: "arrow.uturn.forward") { session.editor.run(.redo) }
         }
@@ -196,19 +281,19 @@ private struct PhoneNoteView: View {
         Task { await workspace.insertDrawing(named: name, into: session) }
       }.disabled(drawingName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
-    .onChange(of: source) { _, value in session.setSourceMode(value) }
-    .onChange(of: readOnly) { _, value in
-      var configuration = session.editor.configuration
-      configuration.isEditable = !value
-      session.editor.updateConfiguration(configuration)
-    }
-    .onChange(of: session.note.path) { _, _ in
-      source = !session.editor.configuration.livePreview
-      readOnly = !session.editor.configuration.isEditable
-    }
-    .task {
-      source = !session.editor.configuration.livePreview
-      readOnly = !session.editor.configuration.isEditable
+    .sheet(isPresented: $backlinks) {
+      NavigationStack {
+        MobileBacklinksView(
+          notePath: session.note.path,
+          identity: "\(workspace.profile.id):\(workspace.generation)",
+          source: { try await workspace.backlinks(to: $0) },
+          onOpen: { path, line in
+            backlinks = false
+            Task { await workspace.open(path, line: line) }
+          }
+        )
+        .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Done") { backlinks = false } } }
+      }
     }
   }
 }

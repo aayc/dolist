@@ -24,6 +24,7 @@
     public var hasActiveInteraction: Bool { editor.hasActiveInteraction }
     @ObservationIgnored public var onChange: ((ExcalidrawScene) -> Void)?
     @ObservationIgnored weak var canvas: MobileDrawingCanvasView?
+    @ObservationIgnored private var pendingElementFocus: String?
 
     public init(
       scene: ExcalidrawScene, environment: DrawingEnvironment = SystemDrawingEnvironment()
@@ -50,6 +51,23 @@
     }
     public func zoomToFit() { canvas?.zoomToFit() }
     public func zoomToSelection() { canvas?.zoomToSelection() }
+    @discardableResult
+    public func focusElement(_ id: String) -> Bool {
+      guard let element = editor.scene.element(id: id), !element.isDeleted else { return false }
+      editor.select([id])
+      pendingElementFocus = id
+      applyPendingElementFocus()
+      return true
+    }
+
+    func applyPendingElementFocus() {
+      guard let id = pendingElementFocus, let canvas, canvas.bounds.width > 0,
+        canvas.bounds.height > 0
+      else { return }
+      pendingElementFocus = nil
+      guard editor.selectedIds.contains(id) else { return }
+      canvas.zoomToSelection()
+    }
     public func resetZoom() { if let canvas { canvas.zoom(by: 1 / canvas.viewport.zoom) } }
     public func zoom(by factor: Double) { canvas?.zoom(by: factor) }
     public var scene: ExcalidrawScene { editor.scene }

@@ -16,6 +16,7 @@ package struct InlineTokenizer {
   package private(set) var markers: [SyntaxMarker] = []
   package private(set) var links: [LinkToken] = []
   package private(set) var images: [LinkToken] = []
+  package private(set) var imageDestinationRanges: [NSRange] = []
   package private(set) var tags: [TagToken] = []
 
   private struct Delimiter {
@@ -276,6 +277,7 @@ package struct InlineTokenizer {
     if bracket.isImage {
       images.append(
         LinkToken(range: NSRange(bracket.start, tail.end), target: .url(tail.destination)))
+      imageDestinationRanges.append(tail.range)
       // Images stay as source unless a platform opts into a standalone preview.
       if bracket.delimiterBottom < delimiters.count {
         delimiters.removeSubrange(bracket.delimiterBottom...)
@@ -300,7 +302,7 @@ package struct InlineTokenizer {
   }
 
   /// `(destination "title")` starting at the `(`. The destination must be non-empty.
-  private func scanLinkTail(from open: Int) -> (destination: String, end: Int)? {
+  private func scanLinkTail(from open: Int) -> (destination: String, end: Int, range: NSRange)? {
     var p = open + 1
     while p < upper, CharClass.isSpaceOrTab(s[p]) { p += 1 }
     let destStart: Int
@@ -354,7 +356,7 @@ package struct InlineTokenizer {
       while p < upper, CharClass.isSpaceOrTab(s[p]) { p += 1 }
     }
     guard at(p) == UTF16Unit.closeParen else { return nil }
-    return (unescaped(destStart, destEnd), p + 1)
+    return (unescaped(destStart, destEnd), p + 1, NSRange(destStart, destEnd))
   }
 
   /// Text in `[start, end)` with backslash escapes resolved.

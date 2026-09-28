@@ -109,4 +109,23 @@ struct HTTPDaemonClientFileTests {
     #expect(stub.requests.count == count)
   }
 
+  @Test func boundedNoteChecksDecodedUTF8AndEncodedStreamWithoutTrustingLength() async throws {
+    let note = NoteResponse(path: "Escaped.md", content: "\u{0}🌿", version: "v1", mtime: 0)
+    let stub = Stub { _ in .json(200, value: note) }
+    let received = try await client(stub).readNote(note.path, maxBytes: 5)
+    #expect(received.content == note.content)
+    await #expect(throws: DaemonClientError.self) {
+      try await client(stub).readNote(note.path, maxBytes: 4)
+    }
+    await #expect(throws: DaemonClientError.self) {
+      try await client(stub).readNote("Wrong.md", maxBytes: 5)
+    }
+    stub.setHandler { _ in
+      .respond(status: 200, headers: [:], body: Data(repeating: 32, count: 5000))
+    }
+    await #expect(throws: DaemonClientError.self) {
+      try await client(stub).readNote(note.path, maxBytes: 5)
+    }
+  }
+
 }

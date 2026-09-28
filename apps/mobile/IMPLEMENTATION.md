@@ -201,3 +201,47 @@ drawings and foundational APIs do not complete those remaining features.
 - Parallel work was interrupted by an account usage limit; continuation resumed the existing
   branches. Native tables/callouts/backlinks, offline attachment uploads and command palette/
   hardware keyboard work remain in flight. Download/recovery composition and full CUA remain.
+
+- Native tables/callouts and honest linked/unlinked backlink presentation are integrated with the
+  real editor lifecycle. Folded source suppresses ordinary markers/badges; source remains intact.
+  Backlink indexing uses bounded host/cache reads away from input. Seven focused shared parsing
+  tests and six bounded authenticated download tests pass. Full native composition is being rerun.
+- Offline attachment originals/intent now commit atomically, with a 5 MB file limit and a 32 MB
+  aggregate retained-original budget. Dependent notes wait for upload acknowledgement; a lost
+  response reconciles exact bytes and cannot recreate a subsequently deleted file. Explicit
+  replacement retains the earlier operation in recovery. Native Files/Photos and review/export
+  screens are composed; actual picker and offline/reconnect CUA remain due.
+- Recovery format 3 includes exact attachment originals and typed upload records. Its verified
+  export proof and conditional removal include these protected bytes. Download controls provide
+  durable requests, pins, budgets and safe cleanup. Restarted workers receive a new ticket, and
+  pins/live editors do not count against disposable markdown. Settings exposes these controls.
+- Command palette/quick open and hardware shortcuts are composed without any iPhone Vim mode.
+  The isolated command stream passed native tests, shared/Mac ranking tests and device SDK build;
+  actual integrated global shortcut and modal-responder CUA is still required.
+- Native real-touch tests passed for inline drawing menu/Edit here, rectangle drawing, Undo/Redo
+  and close/reopen, with unchanged note source and scroll position. CUA's earlier drag discrepancy
+  remains open. A repeat attempt overlapped a test simulator becoming foreground, so it is not
+  counted as a result.
+- Full repository check passed for the content/download/attachment composition checkpoint.
+  Strict unlocked-storage migration and living-list highlight/header/link previews are the active
+  parallel work. The integrator continues the full automated and computer-use release matrix;
+  the app is not yet accepted as complete.
+
+- The latest full composed iPhone suite and full repository check pass. Shared Mac Editor tests
+  pass all 309 cases after attachment destination-range tracking. Native regressions now cover
+  attachment insertion outside complete tables, hidden embed overlap, exact destination replacement
+  with captions preserved, serialized dependency saves, and drawing-element link focus after mounting.
+- Four disk-full recovery/structural regressions pass: destructive changes require a durable
+  checkpoint. Failed profile construction clears the previous visible editor before any new
+  connection selection; its native regression passes. Forget clears the approval badge.
+- CUA passed Quick Open search/Return, table cell editing and Undo, folded callout expansion, and
+  two linked plus one unlinked backlink with correct human line numbers. Photos import preserved
+  the synthetic PNG byte for byte. It exposed table/image overlap and a global shortcut opening
+  over Backlinks; both fixes pass native regressions, with repeat CUA still due.
+- Living-list prose highlights, current/other-note activity header and bounded safe note/citation
+  preview sheets are composed. A preview uses local notes or stored sources and opens a link only
+  through the explicit Open action. Download retries now fetch a fresh authenticated snapshot,
+  including already cached notes. Interrupted local retirement can resume before opening a namespace.
+- Remaining active hardening: strict storage-protection lifecycle composition; bounded search and
+  backlink scans; drawing import races/size preflight; recovery staging cleanup; and the complete
+  computer-use feature matrix. The app remains in progress and no physical-device pass is claimed.

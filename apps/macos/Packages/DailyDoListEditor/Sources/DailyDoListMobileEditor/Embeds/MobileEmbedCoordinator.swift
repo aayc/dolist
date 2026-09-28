@@ -97,7 +97,9 @@
     }
 
     func draws(at offset: Int) -> Bool {
-      guard let owner, let item = item(at: owner.parser.lineIndex.line(containing: offset)) else {
+      guard let owner, owner.content.hiddenRange(at: offset) == nil,
+        let item = item(at: owner.parser.lineIndex.line(containing: offset))
+      else {
         return false
       }
       return item.isDrawing ? host?.loadDrawing != nil : host?.loadAttachment != nil

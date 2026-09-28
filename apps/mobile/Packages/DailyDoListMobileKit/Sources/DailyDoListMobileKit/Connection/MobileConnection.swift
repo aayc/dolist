@@ -56,6 +56,20 @@ public final class MobileConnection {
     }
   }
 
+  /// The app first retires the matching local workspace through WorkspaceRecovery. Removing
+  /// credentials alone never acknowledges or discards queued work.
+  public func removeRetiredProfile(_ id: UUID) async throws {
+    if selected?.id == id { await stop() }
+    try await credentials.remove(id)
+    try await profileStore.remove(id)
+    if selected?.id == id {
+      selected = nil
+      health = nil
+      phase = .idle
+    }
+    profiles = try await profileStore.profiles()
+  }
+
   public func select(_ profile: ConnectionProfile) async {
     let epoch = await stop()
     guard epoch == generation else { return }

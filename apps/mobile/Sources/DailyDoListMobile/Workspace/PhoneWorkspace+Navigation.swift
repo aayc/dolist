@@ -16,7 +16,22 @@ extension PhoneWorkspace {
     defer { scheduleNavigationSave() }
     drawingSessions[path]?.controller.finishEditing()
     await drawingSessions[path]?.checkpoint()
+    sessions[path]?.finishComposition()
     await sessions[path]?.checkpoint()
+    guard sessions[path]?.hasUncheckpointedEdits != true,
+      drawingSessions[path]?.hasUncheckpointedEdits != true
+    else {
+      error = "This note still has unsaved changes. Keep it open until it can be saved."
+      return
+    }
+    if let session = sessions[path] {
+      savedPositions[path] = WorkspaceNavigation.Position(
+        selection: session.editor.selection,
+        scrollY: session.editor.input.contentOffset.y)
+    }
+    sessions[path] = nil
+    // Inline canvases may still use a drawing after its standalone tab closes.
+    if sessions.isEmpty { drawingSessions[path] = nil }
     if let next = tabs.close(path) {
       await open(next, recordHistory: false)
     } else {

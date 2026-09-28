@@ -172,7 +172,10 @@ public actor WorkspaceRepository {
   /// snapshot. If merging those two versions conflicts, preserve the authoritative snapshots
   /// and atomically park the merged local text for explicit review instead of replaying it.
   @discardableResult
-  public func saveForReview(path: String, content: String, expectedRevision: Int64) throws
+  public func saveForReview(
+    path: String, content: String, expectedRevision: Int64,
+    requiringDrawings: [String]? = nil, requiringAttachments: [AttachmentDependency]? = nil
+  ) throws
     -> LocalNote
   {
     let access = try checkpoints.beginAccess()
@@ -183,6 +186,14 @@ public actor WorkspaceRepository {
     }
     guard try index.pending(path)?.attempt == nil else {
       throw WorkspaceRepositoryError.pendingNoteWrites
+    }
+    if let requiringDrawings {
+      for path in requiringDrawings { try DrawingRepository.validatePath(path) }
+      record.requiredDrawings = requiringDrawings.isEmpty ? nil : requiringDrawings
+    }
+    if let requiringAttachments {
+      for dependency in requiringAttachments { try dependency.validate() }
+      record.requiredAttachments = requiringAttachments.isEmpty ? nil : requiringAttachments
     }
     for reference in [record.working, record.base].compactMap({ $0 })
     where !record.recoveryCopies.contains(reference) {

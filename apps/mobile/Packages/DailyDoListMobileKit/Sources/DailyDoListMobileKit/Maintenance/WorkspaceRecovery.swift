@@ -159,6 +159,10 @@ public actor WorkspaceRecovery {
       manifestHash: MarkdownCheckpointStore.digest(manifestData))
   }
 
+  /// Durable retirement authorizes idempotent credential/profile cleanup after an interrupted
+  /// Forget. Open this recovery handle before ordinary repositories when restoring a profile.
+  public func isRetired() throws -> Bool { try store.isForgotten() }
+
   /// Default refusal includes unsent composers and unresolved captures/structural operations.
   /// Pass true only for the user's explicit discard choice, after offering export or sync.
   public func forget(discardUnsyncedWork: Bool = false) throws {

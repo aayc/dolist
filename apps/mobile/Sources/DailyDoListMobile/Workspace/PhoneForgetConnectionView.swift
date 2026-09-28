@@ -27,6 +27,7 @@ struct PhoneForgetConnectionView: View {
         if let summary {
           LabeledContent("Local notes and drawings", value: "\(summary.notes)")
           LabeledContent("Unsent reply drafts", value: "\(summary.composers)")
+          LabeledContent("Pending attachments", value: "\(summary.attachments)")
           LabeledContent("Pending captures", value: "\(summary.captures)")
           LabeledContent("Uncertain moves or deletions", value: "\(summary.structuralOperations)")
           LabeledContent("Unconfirmed agent actions", value: "\(summary.agentOperations)")
@@ -42,7 +43,7 @@ struct PhoneForgetConnectionView: View {
       }
       Section("Save a recovery copy") {
         Text(
-          "Export preserves original text, drawings, captures and the exact requests for uncertain agent actions. It never replays an action. Save the folder in Files; the app then reads it back to verify every file."
+          "Export preserves original text, drawings, attachment bytes, captures and the exact requests for uncertain agent actions. It never replays an action. Save the folder in Files; the app then reads it back to verify every file."
         )
         .font(.footnote)
         Button("Export recovery folder", systemImage: "square.and.arrow.up") { export() }

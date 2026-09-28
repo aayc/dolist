@@ -6,6 +6,21 @@ import Testing
 @testable import DailyDoListMobileIntegration
 
 struct IntegrationTests {
+  @Test func forgettingAConnectionClearsItsPersistedApprovalBadge() async throws {
+    let f = try Fixture()
+    defer { f.remove() }
+    await f.remote.setApprovals([approval("approval-1")])
+    try await f.service().catchUp()
+    #expect(await f.center.badge == 1)
+    let recovery = try WorkspaceRecovery(rootDirectory: f.root, scope: f.scope)
+    try await recovery.forget(discardUnsyncedWork: true)
+
+    // Use a fresh coordinator, as interrupted Forget can finish on the next launch.
+    await f.service().clearNotifications(for: f.scope)
+    #expect(await f.center.existing.isEmpty)
+    #expect(await f.center.badge == 0)
+  }
+
   @Test func foregroundCacheContentionRefetchesBeforeAlerting() async throws {
     let f = try Fixture()
     defer { f.remove() }

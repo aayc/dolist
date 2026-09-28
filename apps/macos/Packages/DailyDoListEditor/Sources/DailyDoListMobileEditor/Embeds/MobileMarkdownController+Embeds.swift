@@ -22,10 +22,69 @@
       guard DrawingEmbed.isDrawingTarget(target), !target.contains("\n"), !target.contains("]]"),
         configuration.isEditable, input.markedTextRange == nil
       else { return false }
-      let result = EmbedEdits.insert(
-        DrawingEmbed.newDrawing(target: target).markdown,
-        in: input.textStorage.mutableString, caret: selection.location, selection: [selection])
-      perform(result.edit)
+      insertEmbed(DrawingEmbed.newDrawing(target: target).markdown)
+      return true
+    }
+
+    private func insertEmbed(_ markdown: String) {
+      let line = parser.lineIndex.line(containing: selection.location)
+      let blockEnd =
+        content.index.table(at: line)?.last
+        ?? content.index.callouts.first(where: { $0.first <= line && $0.last >= line })?.last
+      if let blockEnd {
+        let offset = parser.lineIndex.fullRange(
+          ofLine: blockEnd, textLength: input.textStorage.length
+        ).end
+        let source = input.textStorage.mutableString
+        let prefix = offset > 0 && source.character(at: offset - 1) == 10 ? "\n" : "\n\n"
+        perform(
+          TextEdit(
+            replacements: [
+              .init(
+                range: NSRange(location: offset, length: 0),
+                text: prefix + markdown + "\n\n")
+            ], selection: [NSRange(location: offset + prefix.utf16.count, length: 0)]))
+      } else {
+        let result = EmbedEdits.insert(
+          markdown,
+          in: input.textStorage.mutableString, caret: selection.location, selection: [selection])
+        perform(result.edit)
+      }
+    }
+
+    /// Resolve dependencies on the checkpoint path, away from input and layout callbacks.
+    public static func attachmentTargets(in text: String) -> [String] {
+      text.components(separatedBy: "\n").compactMap {
+        NoteAttachmentEmbed.parse(line: $0)?.spec.target
+      }
+    }
+
+    /// Explicit review replaces only matching standalone attachment references, preserving all
+    /// surrounding source spelling and placing the complete change in one undo group.
+    @discardableResult
+    public func replaceAttachment(target: String, with replacement: String) -> Bool {
+      guard configuration.isEditable, input.markedTextRange == nil,
+        NoteAttachmentEmbed.isSupportedTarget(replacement), !replacement.contains("]]"),
+        !replacement.contains("|")
+      else { return false }
+      let source = input.textStorage.mutableString
+      var edits: [TextEdit.Replacement] = []
+      for line in parser.attachmentLines {
+        let range = parser.lineIndex.contentRange(ofLine: line, textLength: source.length)
+        let text = source.substring(with: range)
+        if let embed = NoteAttachmentEmbed.parse(line: text), embed.spec.target == target {
+          let destination =
+            embed.markdown
+            ? replacement.addingPercentEncoding(
+              withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "()<>"))
+            ) ?? replacement
+            : replacement
+          edits.append(
+            .init(range: embed.targetRange.shifted(by: range.location), text: destination))
+        }
+      }
+      guard !edits.isEmpty else { return false }
+      perform(TextEdit(replacements: edits, selection: [selection]))
       return true
     }
 
@@ -35,10 +94,7 @@
         !target.contains("|"),
         configuration.isEditable, input.markedTextRange == nil
       else { return false }
-      let result = EmbedEdits.insert(
-        DrawingEmbed(target: target).markdown,
-        in: input.textStorage.mutableString, caret: selection.location, selection: [selection])
-      perform(result.edit)
+      insertEmbed(DrawingEmbed(target: target).markdown)
       return true
     }
 

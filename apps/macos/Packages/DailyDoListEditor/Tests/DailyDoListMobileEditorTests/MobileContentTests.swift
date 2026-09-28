@@ -13,11 +13,7 @@
       let owner = MobileMarkdownController()
       owner.input.frame = CGRect(x: 0, y: 0, width: 390, height: 800)
       owner.load(source)
-      let content = MobileContentCoordinator(owner: owner)
-      let glyphs = try #require(owner.input.layoutManager.delegate as? MobileGlyphDelegate)
-      glyphs.contentRange = { [weak content] in content?.hiddenRange(at: $0) }
-      glyphs.contentFragment = { [weak content] in content?.fragment(at: $0, proposed: $1) }
-      content.rebuild()
+      let content = owner.content
       owner.input.layoutManager.ensureLayout(for: owner.input.textContainer)
       content.layout()
       return (owner, content)

@@ -21,6 +21,7 @@
       commandController?.updateMobileGeometry()
       super.layoutSubviews()
       commandController?.embeds.layout()
+      commandController?.content.layout()
       commandController?.annotations.layout()
       guard window != nil, bounds.height > 0, bounds.width > 0,
         let restored = commandController?.restoredScrollY

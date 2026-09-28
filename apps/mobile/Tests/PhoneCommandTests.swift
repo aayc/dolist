@@ -115,7 +115,7 @@ import UIKit
     profile.hostID = "host"
     let scope = WorkspaceScope(
       profileID: profile.id, workspaceID: "workspace", hostID: "host", origin: profile.origin)
-    workspace = PhoneWorkspace(
+    workspace = try PhoneWorkspace(
       rootDirectory: root,
       structural: try WorkspaceStructuralCoordinator(rootDirectory: root, scope: scope),
       recovery: try WorkspaceRecovery(rootDirectory: root, scope: scope), profile: profile,

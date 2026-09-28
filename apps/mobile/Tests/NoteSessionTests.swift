@@ -7,6 +7,50 @@ import UIKit
 
 @MainActor
 struct NoteSessionTests {
+  @Test func dependencyLookupIsSerializedWithCheckpointAndLaterTypingSurvives() async throws {
+    let fixture = try NoteSessionFixture()
+    defer { fixture.remove() }
+    let original = try await fixture.repository.create(path: "Draft.md", content: "First")
+    let session = NoteSession(note: original, repository: fixture.repository)
+    var gate: CheckedContinuation<Void, Never>?
+    var lookups = 0
+    session.requiredAttachments = { _ in
+      lookups += 1
+      if lookups == 1 { await withCheckedContinuation { gate = $0 } }
+      return []
+    }
+    session.editor.selection = NSRange(location: 5, length: 0)
+    session.editor.input.insertText(" local")
+    let first = Task { await session.checkpoint() }
+    for _ in 0..<100 where gate == nil { await Task.yield() }
+    let pending = try #require(gate)
+    session.editor.input.insertText(" later")
+    let second = Task { await session.checkpoint() }
+    for _ in 0..<10 { await Task.yield() }
+    #expect(lookups == 1)
+    pending.resume()
+    await first.value
+    await second.value
+    #expect(lookups == 2)
+    #expect(try await fixture.repository.note("Draft.md")?.content == "First local later")
+    #expect(!session.hasUncheckpointedEdits)
+  }
+
+  @Test func missingAttachmentDependencyDoesNotQueueAnUnprotectedNote() async throws {
+    let fixture = try NoteSessionFixture()
+    defer { fixture.remove() }
+    let original = try await fixture.repository.cache(
+      RemoteNote(content: "Original", version: "v1"), path: "Note.md")
+    let session = NoteSession(note: original, repository: fixture.repository)
+    session.requiredAttachments = { _ in throw WorkspaceRepositoryError.connectionChanged }
+    session.editor.input.insertText("![[pending.png]]\n")
+    await session.checkpoint()
+    #expect(session.hasUncheckpointedEdits)
+    #expect(session.error != nil)
+    #expect(try await fixture.repository.note("Note.md")?.content == "Original")
+    #expect(try await fixture.repository.note("Note.md")?.state == .synced)
+  }
+
   @Test func incomingSnapshotRebasesUncheckpointedTypingAndKeepsNewerTyping() async throws {
     let fixture = try NoteSessionFixture()
     defer { fixture.remove() }

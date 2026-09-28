@@ -11,7 +11,9 @@ struct PhoneRootView: View {
   var body: some View {
     Group {
       if let workspace = model.workspace {
-        PhoneWorkspaceView(model: model, workspace: workspace, chooseHost: { choosingHost = true })
+        PhoneWorkspaceView(
+          model: model, workspace: workspace, chooseHost: { choosingHost = true },
+          isRootCurrent: { !choosingHost && !pairing })
       } else {
         NavigationStack {
           List {

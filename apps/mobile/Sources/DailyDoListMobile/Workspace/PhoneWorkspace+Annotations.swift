@@ -57,17 +57,23 @@ extension PhoneWorkspace {
       switch event {
       case .orchestratorActivity(let activity): applyActivity(activity)
       case .agentStatus(let status):
-        if let activity = status.orchestrator { applyActivity(activity) }
+        if let activity = status.orchestrator {
+          applyActivity(activity)
+        } else {
+          workingActivity = nil
+        }
+      case .taskRecord, .taskRecords: scheduleAnnotations()
       default: break
       }
-      scheduleAnnotations()
     }
   }
 
   func applyActivity(_ activity: OrchestratorActivity) {
     if activity.phase.isWorking {
       workingActivity = activity
-    } else if activity.phase == .idle, workingActivity?.turnId == activity.turnId {
+    } else if activity.phase == .idle, workingActivity?.turnId == activity.turnId,
+      activity.turnId != nil || workingActivity?.trigger == activity.trigger
+    {
       workingActivity = nil
     }
     let change = chipBoard.apply(activity)
@@ -99,6 +105,7 @@ extension PhoneWorkspace {
     presenceTimer?.cancel()
     presenceTimer = nil
     pendingPresence = nil
+    lastPresence = nil
     scheduleAnnotations()
   }
 

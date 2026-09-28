@@ -70,6 +70,20 @@ extension PhoneIntegrations {
     try await notificationCenter.setBadge(0)
   }
 
+  public func clearNotifications(for scope: WorkspaceScope) async {
+    let prefixes = [
+      Self.notificationPrefix(scope, kind: .approval),
+      Self.notificationPrefix(scope, kind: .routine),
+    ]
+    let identifiers = await notificationCenter.existingIdentifiers().filter { id in
+      prefixes.contains(where: id.hasPrefix)
+    }
+    await notificationCenter.remove(Set(identifiers))
+    // Forget also runs after a restart, when no in-memory notification owner remains. A
+    // remaining connection's next authoritative catch-up can publish its current count.
+    try? await notificationCenter.setBadge(0)
+  }
+
   public func backgroundRefreshAllowed() async -> Bool {
     let settings = await preferences()
     return settings.enabled && settings.backgroundRefresh && !settings.requiresUnlockedStorage
