@@ -4,12 +4,12 @@ The running handoff log: what shipped, what's in flight, what's next, and the de
 them, so work can continue on any machine at any point. Read it before starting; keep it current
 (the rules are in `AGENTS.md`, "Handoff log").
 
-**Last updated:** 2026-09-28 (UX review: three bug fixes shipped and installed) · The existing Linux VM runs the remote Cursor agent on `09e13dc`,
+**Last updated:** 2026-09-28 (evening: models per role installed; agent swarm streams A/B/C building) · The existing Linux VM runs the remote Cursor agent on `09e13dc`,
 paired with the other development Mac, whose bundled daemon is now `67a488b` (quit-sync fix
 integrated on `main` as `cf1807c`). Real remote-task, approval, artifact, reboot, bidirectional
 handover and app-close/reopen checks passed.
-The main development Mac's installation is `083005dd` (reinstalled 2026-09-28 with the three UX
-bug fixes below; permissions and app control survived, agent live, CI and macOS green).
+The main development Mac's installation is `7a1aeeff` (models per role; its settings run the
+orchestrator and subagents on `claude-sonnet-5-5` and hard tasks on `claude-opus-5-5`).
 The full native iPhone implementation plan is also on `main` (`40e1b29`); the user has now
 authorized implementation and thorough simulator testing in its separate task.
 
@@ -106,6 +106,13 @@ is still granted. Never kill Daily Do List processes by name; never bind or kill
   workflows are dispatched after this update; private evidence and the prior app remain available.
 
 ## In flight
+
+- **Agent swarm (2026-09-28 evening), spec `docs/specs/agent-swarm.md`:** the wire shapes are on
+  `main` (`35dc8e26`: `workstream` and `helpers` on records, `workstream` on threads). Three
+  streams build in their own worktrees and branches: A (agent core: shared board, workstreams,
+  fan-out helpers, demo vault, docs), B (web: note status header, working-line shimmer, helper
+  badge, inbox workstream groups) and C (the same on the Mac). The lead reviews and merges A
+  first, then B and C, extends the web e2e with A's mock brain, and installs.
 
 - **iPhone, continued after the transfer (2026-09-27 evening):** a second agent took over
   `codex/iphone-app` and integrated every open stream: bounded search, strict storage protection
