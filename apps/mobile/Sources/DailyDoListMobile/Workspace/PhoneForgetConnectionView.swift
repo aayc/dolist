@@ -8,7 +8,9 @@ struct PhoneForgetConnectionView: View {
   /// The owner stops authority, calls conditional/clean recovery.forget, then removes credentials.
   let forget: @MainActor (WorkspaceScope, VerifiedRecoveryExport?) async throws -> Void
   @Environment(\.dismiss) private var dismiss
+  @Environment(\.recoveryExportStaging) private var staging
   @State private var summary: WorkspaceRecoverySummary?
+  @State private var exports: RecoveryExportSession?
   @State private var exported: RecoveryExportResult?
   @State private var proof: VerifiedRecoveryExport?
   @State private var showExport = false
@@ -70,16 +72,23 @@ struct PhoneForgetConnectionView: View {
     .navigationTitle("Forget connection")
     .interactiveDismissDisabled(busy)
     .task { await refresh() }
+    .onDisappear {
+      guard !showExport, let exports else { return }
+      // A failed removal releases its lease with the session; startup cleanup retries it.
+      Task { try? await exports.discard() }
+    }
     .sheet(isPresented: $showExport) {
       if let exported {
         WorkspaceExportPicker(url: exported.directory) { destination in
           showExport = false
-          guard let destination else { return }
           busy = true
           Task {
             do {
-              proof = try await workspace.recovery.verifyExport(exported, at: destination)
+              if let destination {
+                proof = try await workspace.recovery.verifyExport(exported, at: destination)
+              }
             } catch { failure = error.localizedDescription }
+            await discardStagedExport()
             busy = false
           }
         }
@@ -127,11 +136,21 @@ struct PhoneForgetConnectionView: View {
     Task {
       do {
         try await prepare()
-        exported = try await workspace.recovery.export(to: FileManager.default.temporaryDirectory)
+        let session =
+          exports ?? RecoveryExportSession(recovery: workspace.recovery, staging: staging)
+        exports = session
+        exported = try await session.export()
         summary = try await workspace.recovery.summary()
         showExport = true
       } catch { failure = error.localizedDescription }
       busy = false
+    }
+  }
+
+  /// Removes only the staged originals; the verified copy in Files and its proof stay.
+  private func discardStagedExport() async {
+    do { try await exports?.discard() } catch {
+      failure = failure ?? error.localizedDescription
     }
   }
 }

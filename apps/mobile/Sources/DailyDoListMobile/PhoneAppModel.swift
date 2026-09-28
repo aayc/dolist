@@ -9,6 +9,7 @@ import UIKit
 final class PhoneAppModel {
   let connection: MobileConnection
   let pairing: PairingService
+  let exportStaging: RecoveryExportStaging
   private(set) var workspace: PhoneWorkspace?
   var error: String?
   var notificationError: String?
@@ -33,6 +34,7 @@ final class PhoneAppModel {
   init(
     rootDirectory: URL? = nil, defaults: UserDefaults = .standard,
     workspaceFactory: (@MainActor (ConnectionProfile) async throws -> PhoneWorkspace)? = nil,
+    exportStaging: RecoveryExportStaging = .app,
     installIntegrations: Bool = true
   ) {
     root =
@@ -41,6 +43,7 @@ final class PhoneAppModel {
       .appendingPathComponent("DailyDoList", isDirectory: true)
     self.defaults = defaults
     self.workspaceFactory = workspaceFactory
+    self.exportStaging = exportStaging
     let profiles = FileConnectionProfileStore(directory: root)
     credentials = KeychainConnectionCredentials()
     connection = MobileConnection(profiles: profiles, credentials: credentials) {
@@ -86,6 +89,9 @@ final class PhoneAppModel {
       do { _ = try await finishRetiredConnection(profile) } catch {
         self.error = error.localizedDescription
       }
+    }
+    do { try await exportStaging.removeAbandoned() } catch {
+      self.error = error.localizedDescription
     }
     if let saved = defaults.string(forKey: "selectedConnection"),
       let profile = connection.profiles.first(where: { $0.id.uuidString == saved })

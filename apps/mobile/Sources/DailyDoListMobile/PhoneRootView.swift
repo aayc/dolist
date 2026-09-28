@@ -33,6 +33,7 @@ struct PhoneRootView: View {
         }
       }
     }
+    .environment(\.recoveryExportStaging, model.exportStaging)
     .task {
       await model.setActive(scenePhase == .active)
       await model.start()
