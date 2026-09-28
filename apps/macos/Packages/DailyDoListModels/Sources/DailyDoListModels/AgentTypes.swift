@@ -64,13 +64,18 @@ public struct TaskAgentRecord: Codable, Hashable, Sendable, Identifiable {
   /// `.line` when the thread is attached to a line that isn't a task (a heading, a question in
   /// prose…): `taskId` is then the anchor's id and `text` the line. Clients highlight that line.
   public var anchor: TaskAnchorKind?
+  /// The workstream the orchestrator put the task in with related ones (its name).
+  public var workstream: String?
+  /// Helper agents the task's subagent split its work across, while any are known.
+  public var helpers: TaskHelpers?
 
   public var id: String { taskId }
 
   public init(
     taskId: String, notePath: String, date: String?, text: String, line: Int,
     status: TaskAgentStatus, summary: String? = nil, threadId: String?, updatedAt: EpochMillis,
-    unread: Int, anchor: TaskAnchorKind? = nil
+    unread: Int, anchor: TaskAnchorKind? = nil, workstream: String? = nil,
+    helpers: TaskHelpers? = nil
   ) {
     self.taskId = taskId
     self.notePath = notePath
@@ -83,10 +88,13 @@ public struct TaskAgentRecord: Codable, Hashable, Sendable, Identifiable {
     self.updatedAt = updatedAt
     self.unread = unread
     self.anchor = anchor
+    self.workstream = workstream
+    self.helpers = helpers
   }
 
   enum CodingKeys: String, CodingKey {
     case taskId, notePath, date, text, line, status, summary, threadId, updatedAt, unread, anchor
+    case workstream, helpers
   }
 
   // `date` and `threadId` are required-but-nullable on the wire: always encode them.
@@ -103,6 +111,19 @@ public struct TaskAgentRecord: Codable, Hashable, Sendable, Identifiable {
     try c.encode(updatedAt, forKey: .updatedAt)
     try c.encode(unread, forKey: .unread)
     try c.encodeIfPresent(anchor, forKey: .anchor)
+    try c.encodeIfPresent(workstream, forKey: .workstream)
+    try c.encodeIfPresent(helpers, forKey: .helpers)
+  }
+}
+
+/// Helper agents working on parts of one task (``TaskAgentRecord/helpers``).
+public struct TaskHelpers: Codable, Hashable, Sendable {
+  public var total: Int
+  public var done: Int
+
+  public init(total: Int, done: Int) {
+    self.total = total
+    self.done = done
   }
 }
 
@@ -580,12 +601,14 @@ public struct AgentThread: Codable, Hashable, Sendable, Identifiable {
   public var sources: [CitedSource]?
   /// Set on a routine's runs: the routine (``Routine/id``) this thread is one run of.
   public var routineId: String?
+  /// The workstream the orchestrator put the task in with related ones (its name).
+  public var workstream: String?
 
   public init(
     id: String, taskId: String?, notePath: String?, title: String, status: TaskAgentStatus,
     createdAt: EpochMillis, updatedAt: EpochMillis, messages: [ThreadMessage] = [],
     artifacts: [ArtifactMeta] = [], surfaces: [SurfaceKind] = [], sources: [CitedSource]? = nil,
-    routineId: String? = nil
+    routineId: String? = nil, workstream: String? = nil
   ) {
     self.id = id
     self.taskId = taskId
@@ -599,11 +622,12 @@ public struct AgentThread: Codable, Hashable, Sendable, Identifiable {
     self.surfaces = surfaces
     self.sources = sources
     self.routineId = routineId
+    self.workstream = workstream
   }
 
   enum CodingKeys: String, CodingKey {
     case id, taskId, notePath, title, status, createdAt, updatedAt, messages, artifacts, surfaces,
-      sources, routineId
+      sources, routineId, workstream
   }
 
   public func encode(to encoder: Encoder) throws {
@@ -620,6 +644,7 @@ public struct AgentThread: Codable, Hashable, Sendable, Identifiable {
     try c.encode(surfaces, forKey: .surfaces)
     try c.encodeIfPresent(sources, forKey: .sources)
     try c.encodeIfPresent(routineId, forKey: .routineId)
+    try c.encodeIfPresent(workstream, forKey: .workstream)
   }
 
   /// The orchestrator's own chat (``OrchestratorThread``).
@@ -655,12 +680,14 @@ public struct ThreadSummary: Codable, Hashable, Sendable, Identifiable {
   public var pendingApprovals: Int
   /// Set on a routine's runs (see ``AgentThread/routineId``).
   public var routineId: String?
+  /// See ``AgentThread/workstream``.
+  public var workstream: String?
 
   public init(
     id: String, taskId: String?, notePath: String?, title: String, status: TaskAgentStatus,
     createdAt: EpochMillis, updatedAt: EpochMillis, messageCount: Int,
     lastMessagePreview: String? = nil, artifactCount: Int, surfaces: [SurfaceKind],
-    pendingApprovals: Int, routineId: String? = nil
+    pendingApprovals: Int, routineId: String? = nil, workstream: String? = nil
   ) {
     self.id = id
     self.taskId = taskId
@@ -675,11 +702,12 @@ public struct ThreadSummary: Codable, Hashable, Sendable, Identifiable {
     self.surfaces = surfaces
     self.pendingApprovals = pendingApprovals
     self.routineId = routineId
+    self.workstream = workstream
   }
 
   enum CodingKeys: String, CodingKey {
     case id, taskId, notePath, title, status, createdAt, updatedAt, messageCount
-    case lastMessagePreview, artifactCount, surfaces, pendingApprovals, routineId
+    case lastMessagePreview, artifactCount, surfaces, pendingApprovals, routineId, workstream
   }
 
   public func encode(to encoder: Encoder) throws {
@@ -697,6 +725,7 @@ public struct ThreadSummary: Codable, Hashable, Sendable, Identifiable {
     try c.encode(surfaces, forKey: .surfaces)
     try c.encode(pendingApprovals, forKey: .pendingApprovals)
     try c.encodeIfPresent(routineId, forKey: .routineId)
+    try c.encodeIfPresent(workstream, forKey: .workstream)
   }
 
   /// The orchestrator's own chat (``OrchestratorThread``).

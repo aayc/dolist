@@ -95,6 +95,30 @@
           "description": "Present when the thread is attached to a non-task line (taskId is then the anchor id, text the line): clients highlight that line.",
           "type": "string",
           "const": "line"
+        },
+        "workstream": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "The workstream the orchestrator put the task in with related ones (its name, e.g. `Travel backpack`): they share what the agents learn, and clients group them."
+        },
+        "helpers": {
+          "description": "Helper agents the task's subagent split its work across (while any are known): how many, and how many finished.",
+          "type": "object",
+          "properties": {
+            "total": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "done": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": ["total", "done"],
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -773,6 +797,12 @@
           "type": "string",
           "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$"
         },
+        "workstream": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "The workstream the orchestrator put the task in with related ones (its name, e.g. `Travel backpack`): they share what the agents learn, and clients group them."
+        },
         "messages": {
           "type": "array",
           "items": {
@@ -871,6 +901,12 @@
           "description": "Set on a routine's runs: the routine (`Routine.id`) this thread is one run of. Clients list these under their routine, not in the task inbox.",
           "type": "string",
           "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$"
+        },
+        "workstream": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "The workstream the orchestrator put the task in with related ones (its name, e.g. `Travel backpack`): they share what the agents learn, and clients group them."
         },
         "messageCount": {
           "type": "integer",

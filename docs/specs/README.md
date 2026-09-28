@@ -11,6 +11,8 @@ and READMEs it points to. `PROGRESS.md` (at the repo root) says which specs are 
   state, write-ahead for side effects, resuming runs after a handover.
 - [obsidian-migration.md](./obsidian-migration.md) (merge-race fix and import built; B0 and P not
   started): moving from Obsidian, attachments, display gaps.
+- [agent-swarm.md](./agent-swarm.md) (in progress): fan-out, a shared board, workstreams and
+  presence, so the note works as one canvas.
 - [routines.md](./routines.md), [drawings.md](./drawings.md),
   [orchestrator-activity.md](./orchestrator-activity.md) (built).
 

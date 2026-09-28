@@ -98,7 +98,8 @@ extension AgentState {
       status: thread.status, createdAt: thread.createdAt, updatedAt: thread.updatedAt,
       messageCount: thread.messages.count, lastMessagePreview: preview,
       artifactCount: thread.artifacts.count, surfaces: thread.surfaces,
-      pendingApprovals: pendingApprovals, routineId: thread.routineId)
+      pendingApprovals: pendingApprovals, routineId: thread.routineId,
+      workstream: thread.workstream)
   }
 
   /// A thread that belongs in the task inbox: not the orchestrator's chat, and not a routine's

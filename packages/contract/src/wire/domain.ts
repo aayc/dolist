@@ -31,6 +31,14 @@ export const TaskAgentStatusSchema = named(
   ]),
 );
 
+const WorkstreamNameSchema = z
+  .string()
+  .min(1)
+  .max(80)
+  .describe(
+    "The workstream the orchestrator put the task in with related ones (its name, e.g. `Travel backpack`): they share what the agents learn, and clients group them.",
+  );
+
 export const TaskAgentRecordSchema = named(
   "TaskAgentRecord",
   "Everything a client needs to render the agent badge for one task line.",
@@ -50,6 +58,13 @@ export const TaskAgentRecordSchema = named(
       .optional()
       .describe(
         "Present when the thread is attached to a non-task line (taskId is then the anchor id, text the line): clients highlight that line.",
+      ),
+    workstream: WorkstreamNameSchema.optional(),
+    helpers: z
+      .looseObject({ total: CountSchema, done: CountSchema })
+      .optional()
+      .describe(
+        "Helper agents the task's subagent split its work across (while any are known): how many, and how many finished.",
       ),
   }),
 );
@@ -256,6 +271,7 @@ const threadBase = {
   routineId: RuntimeIdSchema.optional().describe(
     "Set on a routine's runs: the routine (`Routine.id`) this thread is one run of. Clients list these under their routine, not in the task inbox.",
   ),
+  workstream: WorkstreamNameSchema.optional(),
 };
 
 export const CitedSourceSchema = named(

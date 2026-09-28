@@ -779,6 +779,8 @@ Everything a client needs to render the agent badge for one task line.
 | `updatedAt` | integer (≥ 0) | yes | Epoch milliseconds. |
 | `unread` | integer (≥ 0) | yes | Agent messages the user has not seen yet. |
 | `anchor` | `"line"` | no | Present when the thread is attached to a non-task line (taskId is then the anchor id, text the line): clients highlight that line. |
+| `workstream` | string (1–80 chars) | no | The workstream the orchestrator put the task in with related ones (its name, e.g. `Travel backpack`): they share what the agents learn, and clients group them. |
+| `helpers` | object | no | Helper agents the task's subagent split its work across (while any are known): how many, and how many finished. |
 
 _Tolerant: clients must ignore keys they don't know._
 
@@ -1055,6 +1057,7 @@ A task's full conversation: messages, artifacts and live surfaces. The orchestra
 | `updatedAt` | integer (≥ 0) | yes | Epoch milliseconds. |
 | `surfaces` | [`SurfaceKind`](#surfacekind)[] | yes |  |
 | `routineId` | string (`^(?!\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$`) | no | Set on a routine's runs: the routine (`Routine.id`) this thread is one run of. Clients list these under their routine, not in the task inbox. |
+| `workstream` | string (1–80 chars) | no | The workstream the orchestrator put the task in with related ones (its name, e.g. `Travel backpack`): they share what the agents learn, and clients group them. |
 | `messages` | [`ThreadMessage`](#threadmessage)[] | yes |  |
 | `artifacts` | [`ArtifactMeta`](#artifactmeta)[] | yes |  |
 | `sources` | [`CitedSource`](#citedsource)[] | no | Web pages the thread cites, with what the agent saw of them: clients preview citations from here, never by fetching. |
@@ -1076,6 +1079,7 @@ A thread without its messages, for lists and badges.
 | `updatedAt` | integer (≥ 0) | yes | Epoch milliseconds. |
 | `surfaces` | [`SurfaceKind`](#surfacekind)[] | yes |  |
 | `routineId` | string (`^(?!\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$`) | no | Set on a routine's runs: the routine (`Routine.id`) this thread is one run of. Clients list these under their routine, not in the task inbox. |
+| `workstream` | string (1–80 chars) | no | The workstream the orchestrator put the task in with related ones (its name, e.g. `Travel backpack`): they share what the agents learn, and clients group them. |
 | `messageCount` | integer (≥ 0) | yes |  |
 | `lastMessagePreview` | string | no |  |
 | `artifactCount` | integer (≥ 0) | yes |  |
