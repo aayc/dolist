@@ -47,11 +47,25 @@ where they disagree, this section wins. Still no iPhone Vim of any kind.
   A full iPhone run still takes 8–14 minutes (runner speed varies; most of it is the
   simulator's first boot), but it skips in 15 seconds when its sources already passed, so the
   whole macOS workflow then finishes in about 3 minutes. See `docs/CI.md`.
-- **Not done:** computer-use acceptance of these changes and the section 9 matrix. The Cursor
-  computer-use helper needs macOS Accessibility and Screen Recording permission, which the
-  user must grant. The QA simulator runs this tip over its old data (protection migration
-  included). Its content fixture is reseeded, with two list lines added for the Tab check.
-  Physical-device checks (section 11) are unchanged.
+- **Computer use (QA simulator, synthetic host):** passed an upgrade over old data (protection
+  migration, restored note, Synced); typing, Backspace, save and sync; image from a table cell
+  lands after the whole table, with byte-identical upload and preview (the transfer's recheck);
+  content search at the correct 1-based line; hardware Tab indenting on the host. Shift-Tab
+  needs modifier keys, which Cursor's computer use drops, so the real-typing UI test presses it
+  with XCTest's keyboard. Its taps on text go through accessibility and can't place a caret, so
+  journeys use buttons, search results and plain keys; bring the Simulator to the front first.
+- **Found by computer use and fixed:** a live protection change never drained, because the
+  keyboard command controller held the workspace strongly (`d4b9b03`). A harmless inbox race
+  showed "WorkspaceContentCacheError error 3" (same commit).
+- **Open defect:** a live protection change started from Settings still can't drain: the
+  released `PhoneWorkspace` stays alive, attributed to SwiftUI's attribute graph plus a holder
+  `leaks` can't name (the simulator process isn't debuggable). The change stays pending and
+  completes before storage opens on the next launch (verified both ways); Retry from the failure
+  screen is unreliable. Nothing is lost. Next: build a debuggable app (Xcode's debug signing)
+  and read the memory graph, or close released workspaces' stores explicitly after quiesce.
+  Also: after a successful change the start screen flashes "Offline" for a few seconds.
+- **Not done:** the rest of the section 9 matrix. Physical-device checks (section 11) are
+  unchanged. The QA fixture now also has two list lines for Tab and the imported image.
 
 ## 1. User intent and transfer boundary
 
