@@ -36,14 +36,18 @@ where they disagree, this section wins. Still no iPhone Vim of any kind.
   index) differs from them. Unifying them changes which note existing links open on every
   client, so it waits for the user's decision.
 - **Verification:** 228/228 native tests, 133 MobileKit, the unsigned device build and
-  `pnpm check` pass; the CI run on `eba709e` passed. Also fixed a desktop-only Vim engine crash
-  that failed the Mac app's CI (timers read freed objects), and a noisy Vim p99 test.
+  `pnpm check` pass, as do CI, Security, Linux bundle and every macOS job except one. That job,
+  the Mac app's own tests, intermittently crashes on an unowned reference read after its object
+  was freed (seen before this session too; not reproducible locally in five full runs).
+  Two desktop Vim timers that could do that were fixed, but the crash recurred, so its source
+  is still unknown. Failing Swift jobs now upload crash reports. A noisy Vim p99 test was fixed.
 - **CI:** the iPhone job caches its DerivedData, skips coverage and the index store, builds for
   a device only on `main`, and boots the simulator during the build. A branch skips iPhone
   sources that already passed. Superseded caches are pruned (the repository was over its
   10 GB limit), the redundant iOS package build is gone, and one redundant UI test is dropped.
-  The iPhone job went from 14 to about 9 minutes, most of which is the simulator's first boot,
-  and to about one minute when its sources are unchanged. See `docs/CI.md`.
+  A full iPhone run still takes 8–14 minutes (runner speed varies; most of it is the
+  simulator's first boot), but it skips in 15 seconds when its sources already passed, so the
+  whole macOS workflow then finishes in about 3 minutes. See `docs/CI.md`.
 - **Not done:** computer-use acceptance of these changes and the section 9 matrix. The Cursor
   computer-use helper needs macOS Accessibility and Screen Recording permission, which the
   user must grant. The QA simulator runs this tip over its old data (protection migration
