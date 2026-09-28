@@ -4,7 +4,7 @@ The running handoff log: what shipped, what's in flight, what's next, and the de
 them, so work can continue on any machine at any point. Read it before starting; keep it current
 (the rules are in `AGENTS.md`, "Handoff log").
 
-**Last updated:** 2026-09-27 · The existing Linux VM runs the remote Cursor agent on `09e13dc`,
+**Last updated:** 2026-09-27 (evening: iPhone streams integrated, CI faster) · The existing Linux VM runs the remote Cursor agent on `09e13dc`,
 paired with the other development Mac, whose bundled daemon is now `67a488b` (quit-sync fix
 integrated on `main` as `cf1807c`). Real remote-task, approval, artifact, reboot, bidirectional
 handover and app-close/reopen checks passed.
@@ -106,16 +106,24 @@ is still granted. Never kill Daily Do List processes by name; never bind or kill
 
 ## In flight
 
-- **iPhone transfer requested (2026-09-27):** the user asked for a full progress/problem/next-step
-  document to hand implementation to another agent. Feature work in the previous task has stopped,
-  all three subagents have preserved their work and stopped, and its hourly continuation is paused.
-  Start with [the transfer document](https://github.com/aayc/dolist/blob/a16fbcd/apps/mobile/TRANSFER.md)
-  on `codex/iphone-app` (documentation checkpoint `a16fbcd`, integrated code `79e928f`).
-  It records verified behavior, exact outstanding defects, remaining CUA, toolchain/CI evidence and
-  integration instructions. Unintegrated pushed work: protection `22d1f60`, bounded search
-  `586e150` (never its snapshot parent), uncompiled/untested drawing-import WIP `c2d5e19`. Recovery
-  staging cleanup and hardware Tab/Shift-Tab remain unwritten. Do not mark the app complete.
-  CI, Security and Linux passed on `79e928f`; the native workflow was still running at handoff.
+- **iPhone, continued after the transfer (2026-09-27 evening):** a second agent took over
+  `codex/iphone-app` and integrated every open stream: bounded search, strict storage protection
+  composed into the app lifecycle, drawing import safety with the protected shape library, and
+  recovery-export staging with retirement ordering. It also fixed the download defects, found
+  and fixed a sync that dropped pending edits during a refresh, and added hardware
+  Tab/Shift-Tab and the release of hidden editors. Current state, evidence and what remains:
+  [TRANSFER.md section 0](https://github.com/aayc/dolist/blob/codex/iphone-app/apps/mobile/TRANSFER.md).
+  228/228 native tests, the device build and `pnpm check` pass. Computer-use acceptance is
+  blocked until the user grants the Cursor computer-use helper Accessibility and Screen
+  Recording. Relative wikilink resolution awaits a user decision (it would change which note
+  existing links open on every client). No iPhone Vim. Do not mark the app complete.
+- **CI speed (same session, on `codex/iphone-app`):** the iPhone job caches its build, builds for
+  a device only on `main` and skips coverage. A full run still takes 8–14 minutes (mostly the
+  simulator's first boot), but a branch whose iPhone sources already passed skips it in 15 s,
+  and the macOS workflow then finishes in about 3 minutes. Superseded caches are pruned (the
+  repository was over its 10 GB cache limit), and the redundant iOS package build is gone.
+  A desktop Vim timer crash is fixed, but a separate intermittent unowned-reference crash in the
+  Mac app tests remains; failing Swift jobs now upload crash reports so the next one names it.
 
 - Full native iPhone app: `codex/iphone-app`, checkpoint `79e928f` pushed, with current main
   host-continuity fixes merged. Native pairing/Keychain, identity guard, durable notes/composers/
