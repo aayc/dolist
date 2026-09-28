@@ -126,6 +126,17 @@ const CURATED: Array<[string, string]> = [
   ],
   ["dedent closes items", "- [ ] a\n    - [ ] b\n  - [ ] c\n- [ ] d"],
   ["paragraph between tasks", "- [ ] a\nparagraph\n  - [ ] b"],
+  [
+    "agent lines are not notes",
+    [
+      "- [ ] Research desks",
+      "  - Top pick: Desk A %%agent:thr_1%%",
+      "  - budget $500",
+      "    Runner-up: Desk B %%agent%%",
+      "  - [ ] Measure the room %%agent:thr_1%%",
+      "    - note under the agent's task",
+    ].join("\n"),
+  ],
 ];
 
 // ── Generated documents (adapted from the core's tasks.property.test.ts) ────────────────────────

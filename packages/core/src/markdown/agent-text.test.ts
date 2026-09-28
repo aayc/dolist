@@ -32,13 +32,13 @@ describe("agent text markers", () => {
 
   it("keeps agent-written tasks' identity by their visible text and flags them", () => {
     const tasks = parseTasks(
-      "- [ ] Call the restaurant to confirm %%agent:thr_9%%\n- [ ] Mine\n  - note %%agent%%",
+      "- [ ] Call the restaurant to confirm %%agent:thr_9%%\n- [ ] Mine\n  - agent's %%agent%%\n  - mine",
     );
     expect(tasks.map((t) => [t.text, t.agent ?? false])).toEqual([
       ["Call the restaurant to confirm", true],
       ["Mine", false],
     ]);
-    expect(tasks[1]!.notes).toEqual(["note"]);
+    expect(tasks[1]!.notes).toEqual(["mine"]);
     const { tasks: tracked } = trackTasks([], tasks, { idFactory: () => "t", now: 1 });
     expect(tracked[0]!.agent).toBe(true);
     expect(tracked[1]!.agent).toBeUndefined();

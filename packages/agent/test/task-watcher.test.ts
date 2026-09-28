@@ -6,7 +6,7 @@ import {
 } from "@ddl/core";
 import { MemoryStorageProvider } from "@ddl/storage";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { TaskWatcher } from "../src/orchestrator/task-watcher";
+import { TaskWatcher, taskStatePath } from "../src/orchestrator/task-watcher";
 import type { NoteEvent, TaskEvent } from "../src/orchestrator/types";
 import { testSettings } from "./helpers/fakes";
 
@@ -129,6 +129,25 @@ describe("TaskWatcher settling", () => {
     expect(notesEdit!.task.id).toBe(added!.task.id);
     expect(textEdit).toMatchObject({ changes: ["text"], previous: { text: "Book dentist" } });
     expect(notesEdit).toMatchObject({ changes: ["notes"], task: { notes: ["prefer mornings"] } });
+  });
+
+  it("never reads the agent's lines under a task as an edit of it, only the user's", async () => {
+    const { storage, watcher, events } = setup();
+    await watcher.start();
+    await storage.write(TODAY, "- [ ] Research desks");
+    await vi.advanceTimersByTimeAsync(SETTLE);
+    await storage.write(TODAY, "- [ ] Research desks\n  - Top pick: Desk A %%agent:thr_1%%");
+    await vi.advanceTimersByTimeAsync(SETTLE);
+    await storage.write(TODAY, "- [ ] Research desks\n  - Top pick: Desk B %%agent:thr_1%%");
+    await vi.advanceTimersByTimeAsync(SETTLE);
+    expect(kinds(events)).toEqual(["added:Research desks"]);
+    await storage.write(
+      TODAY,
+      "- [ ] Research desks\n  - Top pick: Desk B %%agent:thr_1%%\n  - under $500",
+    );
+    await vi.advanceTimersByTimeAsync(SETTLE);
+    expect(kinds(events)).toEqual(["added:Research desks", "updated:Research desks"]);
+    expect(events[1]).toMatchObject({ changes: ["notes"], task: { notes: ["under $500"] } });
   });
 
   it("emits completed, reopened and removed", async () => {
@@ -328,6 +347,30 @@ describe("TaskWatcher startup", () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(kinds(third.events)).toEqual(["completed:Renew passport"]);
     expect(third.events[0]!.task.id).toBe(id);
+  });
+
+  it("forgets the agent's lines that older tracker state lists as notes", async () => {
+    const storage = new MemoryStorageProvider();
+    const first = setup({ storage });
+    await first.watcher.start();
+    const answered = "- [ ] Research desks\n  - Top pick: Desk A %%agent:thr_1%%";
+    await storage.write(TODAY, answered);
+    await vi.advanceTimersByTimeAsync(SETTLE);
+    await first.watcher.stop();
+    const saved = JSON.parse((await storage.read(taskStatePath(TODAY)))!.content) as {
+      tasks: Array<{ notes: string[] }>;
+      settled: Record<string, { task: { notes: string[] } }>;
+    };
+    for (const task of [...saved.tasks, ...Object.values(saved.settled).map((s) => s.task)]) {
+      task.notes = ["Top pick: Desk A"];
+    }
+    await storage.write(taskStatePath(TODAY), JSON.stringify(saved));
+
+    const second = setup({ storage });
+    await second.watcher.start();
+    await storage.write(TODAY, `${answered}\n- [ ] Renew passport`);
+    await vi.advanceTimersByTimeAsync(SETTLE);
+    expect(kinds(second.events)).toEqual(["added:Renew passport"]);
   });
 
   it("emits unsettled changes when resumed after a pause", async () => {

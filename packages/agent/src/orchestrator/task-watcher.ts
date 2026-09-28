@@ -22,6 +22,7 @@ import {
   mayBeRequest,
   normalizePath,
   type ParsedTask,
+  parseAgentLine,
   parseDailyNotePath,
   parseTasks,
   silentLogger,
@@ -88,6 +89,24 @@ export interface TaskLookup {
  */
 function noteTasks(content: string): ParsedTask[] {
   return isDrawingMarkdown(content) ? [] : parseTasks(content);
+}
+
+/**
+ * Tracker state saved before the agent's lines stopped counting as notes still lists them under
+ * their tasks. Left there, the next parse would read as an edit of every task the agent answered.
+ */
+function dropAgentNotes(state: NoteState, content: string): void {
+  const agentLines = new Set<string>();
+  for (const raw of content.split("\n")) {
+    const agent = parseAgentLine(raw.trimEnd());
+    if (agent) agentLines.add(agent.text.trim().replace(/^([-*+]|\d{1,9}[.)])\s+/, ""));
+  }
+  if (agentLines.size === 0) return;
+  const drop = (task: TrackedTask) => {
+    task.notes = task.notes.filter((note) => !agentLines.has(note));
+  };
+  for (const task of [...state.tasks, ...state.ghosts]) drop(task);
+  for (const { task } of state.settled.values()) drop(task);
 }
 
 /** The user's non-task lines (no blank, task or agent-written lines), trimmed, in note order. */
@@ -441,7 +460,8 @@ export class TaskWatcher implements TaskLookup {
   }
 
   private async process(state: NoteState, cause: "event" | "scan"): Promise<void> {
-    if (!state.loaded) await this.loadState(state);
+    const loading = !state.loaded;
+    if (loading) await this.loadState(state);
     const file = await this.storage.read(state.notePath);
     if (!this.running) return;
     if (cause === "event") this.emitter.emit("changed", { notePath: state.notePath });
@@ -456,6 +476,7 @@ export class TaskWatcher implements TaskLookup {
     // Like tasks: a note that appears while we watch is new writing; one a scan finds already existed.
     const created = state.content === null && cause === "event";
     state.content = file.content;
+    if (loading) dropAgentNotes(state, file.content);
     if (file.version !== state.contentVersion) {
       const parsed = noteTasks(file.content);
       if (!state.tracked) {

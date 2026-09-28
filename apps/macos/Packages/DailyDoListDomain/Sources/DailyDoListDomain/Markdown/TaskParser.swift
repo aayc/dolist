@@ -8,9 +8,9 @@
 /// - lines split on `\n` (one trailing `\r` is dropped; a lone `\r` is not a break); a leading
 ///   byte order mark belongs to no line but offsets still count it;
 /// - any line closes the list items at its indent or deeper (tab = 4 columns); non-task lines
-///   under a task become its notes;
-/// - an agent marker (`AgentText`) ending a line is left out of task texts and notes, and flags
-///   the task as the agent's.
+///   under a task become its notes, unless the agent wrote them;
+/// - an agent marker (`AgentText`) ending a line is left out of task texts and flags the task as
+///   the agent's.
 public enum TaskParser {
   /// `parseTasks`: every checkbox task in the document, in one linear pass.
   public static func parse(_ markdown: String) -> [ParsedTask] {
@@ -122,10 +122,10 @@ public enum TaskParser {
           stackIndent.append(indent)
           stackOwner.append(tasks.count - 1)
         } else {
-          // A non-task line nested under a task (sub-bullet or continuation) is agent context.
-          if owner >= 0 {
-            tasks[owner].notes.append(
-              noteText(p, jsTrim(p, lineStart..<(agentMarker?.from ?? rawEnd))))
+          // The user's non-task lines nested under a task (sub-bullets, continuations) are its
+          // notes; the agent's lines aren't.
+          if owner >= 0, agentMarker == nil {
+            tasks[owner].notes.append(noteText(p, jsTrim(p, lineStart..<rawEnd)))
           }
           if let markerEnd = matchMarker(p, wsEnd, rawEnd), markerEnd < rawEnd,
             isBlank(p[markerEnd])

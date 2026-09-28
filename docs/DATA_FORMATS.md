@@ -251,7 +251,8 @@ The task watcher's identity tracking for one daily note (`hash` is `hashString` 
 ```
 
 `TrackedTask`: `id`, `text`, `status` (`open|done|in_progress|cancelled|deferred|other`), `line`,
-`depth`, `parentId`, `notes: string[]`, `firstSeenAt`, `updatedAt`. `settled` keys must equal
+`depth`, `parentId`, `notes: string[]` (the user's lines under the task; the agent's aren't notes, and
+older files that list them lose them on load), `firstSeenAt`, `updatedAt`. `settled` keys must equal
 `task.id`; `notePath` must equal the note it is loaded for.
 
 - Corrupt state, or state recorded for another note, is quarantined. A file from a newer app is

@@ -1,4 +1,4 @@
-import { parseAgentLine, stripAgentMarker } from "./agent-text";
+import { isAgentLine, parseAgentLine, stripAgentMarker } from "./agent-text";
 import { parseWikiLinks } from "./wikilinks";
 
 /**
@@ -31,7 +31,10 @@ export interface ParsedTask {
   textFrom: number;
   /** Line of the nearest ancestor task, if this task is nested under one. */
   parentLine: number | null;
-  /** Non-task lines nested under this task (sub-bullets / notes), trimmed. Agent context. */
+  /**
+   * The user's non-task lines nested under this task (sub-bullets / notes), trimmed. Lines the
+   * agent wrote (ending in an agent marker) aren't notes. Agent context.
+   */
   notes: string[];
   /** Wikilink targets mentioned in the task text (e.g. forwarded-to daily notes). */
   links: string[];
@@ -169,13 +172,10 @@ export function parseTasks(markdown: string): ParsedTask[] {
       continue;
     }
 
-    // Non-task line nested under a task (sub-bullet or continuation): keep it as agent context.
-    if (owner !== null) {
-      tasks[owner]!.notes.push(
-        stripAgentMarker(raw)
-          .trim()
-          .replace(/^([-*+]|\d{1,9}[.)])\s+/, ""),
-      );
+    // The user's non-task lines nested under a task (sub-bullets, continuations) are its notes.
+    // The agent's aren't: writing its answer under a task must not read as an edit of the task.
+    if (owner !== null && !isAgentLine(raw)) {
+      tasks[owner]!.notes.push(raw.trim().replace(/^([-*+]|\d{1,9}[.)])\s+/, ""));
     }
     if (LIST_ITEM_RE.test(raw)) stack.push({ indent: lineIndent, taskIndex: null });
   }
