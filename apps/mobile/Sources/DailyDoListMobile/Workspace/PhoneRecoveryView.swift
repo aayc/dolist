@@ -6,8 +6,8 @@ import UIKit
 struct PhoneRecoveryView: View {
   let workspace: PhoneWorkspace
   @Environment(\.recoveryExportStaging) private var staging
-  @State private var notes: [LocalNote] = []
-  @State private var drawings: [LocalDrawing] = []
+  @State private var notes: [String] = []
+  @State private var drawings: [String] = []
   @State private var exporting = false
   @State private var exports: RecoveryExportSession?
   @State private var exported: RecoveryExportResult?
@@ -18,16 +18,14 @@ struct PhoneRecoveryView: View {
   var body: some View {
     List {
       Section("Local notes needing review") {
-        ForEach(notes, id: \.path) { note in
-          NavigationLink(note.path) { PhoneNoteRecoveryView(workspace: workspace, path: note.path) }
+        ForEach(notes, id: \.self) { path in
+          NavigationLink(path) { PhoneNoteRecoveryView(workspace: workspace, path: path) }
         }
         if notes.isEmpty { Text("No note conflicts").foregroundStyle(.secondary) }
       }
       Section("Local drawings needing review") {
-        ForEach(drawings, id: \.path) { drawing in
-          NavigationLink(drawing.path) {
-            PhoneDrawingRecoveryView(workspace: workspace, path: drawing.path)
-          }
+        ForEach(drawings, id: \.self) { path in
+          NavigationLink(path) { PhoneDrawingRecoveryView(workspace: workspace, path: path) }
         }
         if drawings.isEmpty { Text("No drawing conflicts").foregroundStyle(.secondary) }
       }
@@ -96,12 +94,11 @@ struct PhoneRecoveryView: View {
     .navigationTitle("Recovery")
     .task {
       do {
-        notes = try await workspace.repository.notes().filter {
+        let review = try await workspace.repository.cachedDocumentMetadata().filter {
           $0.state == .needsReview || $0.state == .recoveryDraft
         }
-        drawings = try await workspace.drawingRepository.drawings().filter {
-          $0.state == .needsReview || $0.state == .recoveryDraft
-        }
+        notes = review.filter { !$0.isDrawing }.map(\.path)
+        drawings = review.filter(\.isDrawing).map(\.path)
       } catch { failure = error.localizedDescription }
       await workspace.loadCaptures()
       await workspace.agent?.refreshPendingMutations()
