@@ -55,6 +55,23 @@ struct StorageProtectionTests {
     index = nil
   }
 
+  @Test func appOwnedFilesFailClosedWhileStrictStorageIsLocked() throws {
+    let f = try RepositoryFixture()
+    defer { f.remove() }
+    let policy = try MobileStorageProtection(rootDirectory: f.directory, mode: .whileUnlocked)
+    defer { try? policy.unregister() }
+    let file = MobileProtectedFile(url: f.directory.appendingPathComponent("library/shapes.json"))
+    #expect(try file.read() == nil)
+    try file.write(Data("Synthetic shapes".utf8))
+    policy.setProtectedDataAvailable(false)
+    #expect(throws: MobileStorageProtectionError.unavailable) { try file.read() }
+    #expect(throws: MobileStorageProtectionError.unavailable) {
+      try file.write(Data("Synthetic replacement".utf8))
+    }
+    policy.setProtectedDataAvailable(true)
+    #expect(try file.read() == Data("Synthetic shapes".utf8))
+  }
+
   @Test func migrationRejectsSymlinksWithoutFollowingThem() throws {
     let f = try RepositoryFixture()
     defer { f.remove() }
