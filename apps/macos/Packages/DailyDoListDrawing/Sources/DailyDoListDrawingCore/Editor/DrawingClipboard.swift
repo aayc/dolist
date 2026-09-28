@@ -1,12 +1,14 @@
 import Foundation
 
 public enum DrawingTransferError: Error, LocalizedError {
-  case invalid, tooLarge, unreadableFiles
+  case invalid, tooLarge, unreadableFiles, interactionInProgress
   public var errorDescription: String? {
     switch self {
     case .invalid: "The clipboard or library does not contain a readable drawing."
     case .tooLarge: "This drawing transfer exceeds the 32 MB or 10,000 element limit."
     case .unreadableFiles: "The drawing's existing file map is unreadable; it was left unchanged."
+    case .interactionInProgress:
+      "Finish the current drawing gesture or text edit, then import again."
     }
   }
 }
