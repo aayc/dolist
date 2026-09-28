@@ -2,7 +2,8 @@ name: iPhone app
 
 # The native iPhone app (apps/mobile): its unit, UIKit and real-input UI tests in a simulator. The
 # build directory (DerivedData) is cached like the macOS jobs' SwiftPM builds, so a run recompiles
-# only what changed. The unsigned build for a physical iPhone runs on main or with `device`.
+# only what changed, and a branch skips sources that already passed. The unsigned build for a
+# physical iPhone runs on main or with `device`. Most of a run is the simulator's first boot.
 on:
   workflow_call:
     inputs:
@@ -42,31 +43,47 @@ jobs:
       - name: Select Xcode
         id: xcode
         run: apps/macos/scripts/ci-select-xcode.sh
-      - name: Boot a simulator
-        # In the background: a fresh runner's first boot takes minutes, overlapping the build.
-        run: |
-          id="$(apps/mobile/scripts/simulator-id.sh)"
-          echo "DDL_IOS_DESTINATION=platform=iOS Simulator,id=$id" >> "$GITHUB_ENV"
-          nohup xcrun simctl boot "$id" > "$RUNNER_TEMP/simulator-boot.log" 2>&1 &
-      - name: Install pinned XcodeGen
-        run: apps/mobile/scripts/install-xcodegen.sh
-
       - name: Cache key
         id: key
         run: |
           # shellcheck disable=SC2086
-          echo "sources=$(git ls-files -s -- $SOURCES | git hash-object --stdin)" >> "$GITHUB_OUTPUT"
+          echo "sources=$(git ls-files -s -- $SOURCES .github/workflows/ios.yml |
+            git hash-object --stdin)" >> "$GITHUB_OUTPUT"
+      - name: Passed already?
+        # Like turbo in ci.yml: a branch skips sources that already passed on it or on main (the
+        # tests read nothing else); main always runs.
+        id: passed
+        if: github.ref != 'refs/heads/main' && !inputs.device
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: apps/mobile/.build/passed
+          key: iphone-passed-${{ steps.xcode.outputs.key }}-${{ steps.key.outputs.sources }}
+          lookup-only: true
+
+      - name: Install pinned XcodeGen
+        if: steps.passed.outputs.cache-hit != 'true'
+        run: apps/mobile/scripts/install-xcodegen.sh
       - name: Restore the build directory
         id: cache
+        if: steps.passed.outputs.cache-hit != 'true'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.DERIVED_DATA }}
           key: iphone-${{ steps.xcode.outputs.key }}-${{ steps.key.outputs.sources }}
           restore-keys: iphone-${{ steps.xcode.outputs.key }}-
       - name: Keep unchanged sources' times
+        if: steps.passed.outputs.cache-hit != 'true'
         run: |
           # shellcheck disable=SC2086
           node apps/macos/scripts/ci-mtimes.mjs restore "$DERIVED_DATA" $SOURCES
+      - name: Boot a simulator
+        # A fresh runner's first boot takes minutes: in the background, it overlaps the build
+        # (started before the restore, it slowed the restore down instead).
+        if: steps.passed.outputs.cache-hit != 'true'
+        run: |
+          id="$(apps/mobile/scripts/simulator-id.sh)"
+          echo "DDL_IOS_DESTINATION=platform=iOS Simulator,id=$id" >> "$GITHUB_ENV"
+          nohup xcrun simctl boot "$id" > "$RUNNER_TEMP/simulator-boot.log" 2>&1 &
 
       - name: Build for a physical iPhone without signing
         if: github.ref == 'refs/heads/main' || inputs.device
@@ -74,6 +91,7 @@ jobs:
           DDL_IOS_DESTINATION: generic/platform=iOS
         run: apps/mobile/scripts/build.sh
       - name: Build for testing
+        if: steps.passed.outputs.cache-hit != 'true'
         env:
           DDL_BUILD_TIMING: "1"
         run: |
@@ -84,6 +102,7 @@ jobs:
           fi
           sed -n '/Build Timing Summary/,$p' "$log" | head -40
       - name: Simulator input and UI tests
+        if: steps.passed.outputs.cache-hit != 'true'
         run: apps/mobile/scripts/test.sh test-without-building
       - name: Test evidence
         if: ${{ failure() }}
@@ -95,7 +114,7 @@ jobs:
           retention-days: 14
 
       - name: Record the sources' times
-        if: ${{ !cancelled() && steps.cache.outputs.cache-hit != 'true' }}
+        if: ${{ !cancelled() && steps.cache.outcome == 'success' && steps.cache.outputs.cache-hit != 'true' }}
         run: |
           # Result bundles and logs are per run; keep them out of the cache.
           rm -rf "$DERIVED_DATA/Logs"
@@ -103,8 +122,17 @@ jobs:
           node apps/macos/scripts/ci-mtimes.mjs save "$DERIVED_DATA" $SOURCES
       - name: Save the build directory
         # Also after failing tests: the build itself is reusable.
-        if: ${{ !cancelled() && steps.cache.outputs.cache-hit != 'true' }}
+        if: ${{ !cancelled() && steps.cache.outcome == 'success' && steps.cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.DERIVED_DATA }}
           key: iphone-${{ steps.xcode.outputs.key }}-${{ steps.key.outputs.sources }}
+      - name: Remember the pass
+        if: steps.passed.outputs.cache-hit != 'true'
+        run: mkdir -p apps/mobile/.build/passed && touch apps/mobile/.build/passed/ok
+      - name: Save the pass
+        if: steps.passed.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: apps/mobile/.build/passed
+          key: iphone-passed-${{ steps.xcode.outputs.key }}-${{ steps.key.outputs.sources }}

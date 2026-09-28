@@ -171,7 +171,11 @@ back. Changed and new files keep the current time, so they and their dependents 
 cache can make a run faster, never skip a rebuild. The iPhone job caches its Xcode DerivedData the
 same way, keyed by `apps/mobile` and `apps/macos/Packages` (`ci-mtimes.mjs` takes those paths),
 without the per-run logs and result bundles. Its command-line builds skip the index store and code
-coverage, which nothing reads; a failing run uploads its result bundle.
+coverage, which nothing reads; a failing run uploads its result bundle. Most of its time is the
+simulator's first boot on a fresh runner, which it starts in the background during the build.
+Like turbo, it remembers passing sources (an `iphone-passed-…` cache entry): a branch whose
+iPhone sources and `ios.yml` already passed on it or on `main` skips the build and tests; `main`
+always runs them.
 
 ```sh
 node scripts/lint.mjs --all --only swift   # or pnpm lint:fix to format
