@@ -141,7 +141,8 @@ extension Vim {
         if keysAreChars {
           let delay = (option("insertModeEscKeysTimeout")?.numberValue ?? 0) / 1000
           lastInsertModeKeyTimer = scheduler.schedule(after: delay) {
-            [unowned self, unowned cm, unowned vim] in
+            [weak self, weak cm, weak vim] in
+            guard let self, let cm, let vim else { return }
             if vim.insertMode && !vim.inputState.keyBuffer.isEmpty { self.clearInputState(cm) }
           }
           let selections = cm.listSelections()

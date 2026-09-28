@@ -197,8 +197,9 @@ extension Vim {
     let searchState = getSearchState(cm)
     // vim.js stores the timer it just cleared here, not the new one.
     searchState.highlightTimeout = highlightTimeout
-    highlightTimeout = scheduler.schedule(after: 0.05) { [weak cm, unowned self] in
-      guard let cm, cm.vim != nil else { return }
+    // Weak: a timer can outlive an engine or editor released without detaching.
+    highlightTimeout = scheduler.schedule(after: 0.05) { [weak cm, weak self] in
+      guard let self, let cm, cm.vim != nil else { return }
       let searchState = self.getSearchState(cm)
       searchState.highlightTimeout = nil
       if !searchState.hasOverlay || searchState.overlay !== query {
