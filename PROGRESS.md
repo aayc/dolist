@@ -169,6 +169,21 @@ Native iPhone implementation is authorized and continues separately, including s
 
 ## Shipped on `main` (newest first; older history is `git log`)
 
+- `5ad4fcf` CI keeps only the newest build and turbo cache of each job per branch (the repository
+  was over its 10 GB cache limit), and failing Swift jobs upload crash reports. Two Vim timers no
+  longer read freed objects, and the Vim keystroke p99s take the best of three rounds (on the
+  same code one round varied sixfold between CI runs).
+
+- `5ad4fcf` CI keeps only the newest build and turbo cache of each job per branch (the repository
+  was over its 10 GB cache limit), and failing Swift jobs upload crash reports. Two Vim timers no
+  longer read freed objects, and the Vim keystroke p99s take the best of three rounds (on the
+  same code one round varied sixfold between CI runs).
+
+- `5ad4fcf` CI keeps only the newest build and turbo cache of each job per branch (the repository
+  was over its 10 GB cache limit), and failing Swift jobs upload crash reports. Two Vim timers no
+  longer read freed objects, and the Vim keystroke p99s take the best of three rounds (on the
+  same code one round varied sixfold between CI runs).
+
 - `cf1807c` Relaying clients flush their last saved notes on quit, so a task entered just before
   closing the app can reach the always-on host without waiting for the next launch. Installed
   in the paired Mac's daemon and verified with a regression plus actual Cursor execution.
