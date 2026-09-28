@@ -8,6 +8,8 @@ public protocol NoteCheckpointStore: Sendable {
   func beginAccess() throws -> CheckpointAccessLease?
   func put(_ content: String) throws -> String
   func read(_ reference: String) throws -> String
+  /// Read-only previews/search may skip oversized content without allocating the full file.
+  func read(_ reference: String, maxBytes: Int) throws -> String?
   func fileURL(_ reference: String) throws -> URL
 }
 
@@ -15,6 +17,12 @@ extension NoteCheckpointStore {
   /// Injected stores without filesystem checkpoints need no file lease. Wrappers around a real
   /// MarkdownCheckpointStore must forward this operation as well as put/read.
   public func beginAccess() throws -> CheckpointAccessLease? { nil }
+
+  public func read(_ reference: String, maxBytes: Int) throws -> String? {
+    guard maxBytes > 0 else { return nil }
+    let text = try read(reference)
+    return text.utf8.count <= maxBytes ? text : nil
+  }
 }
 
 public struct MarkdownCheckpointStore: NoteCheckpointStore {
@@ -64,6 +72,29 @@ public struct MarkdownCheckpointStore: NoteCheckpointStore {
     let access = try beginAccess()
     defer { access?.release() }
     let data = try Data(contentsOf: fileURL(reference))
+    guard Self.digest(data) == reference, let text = String(data: data, encoding: .utf8) else {
+      throw WorkspaceRepositoryError.corruptCheckpoint
+    }
+    return text
+  }
+
+  public func read(_ reference: String, maxBytes: Int) throws -> String? {
+    guard maxBytes > 0 else { return nil }
+    let access = try beginAccess()
+    defer { access?.release() }
+    let handle = try FileHandle(forReadingFrom: fileURL(reference))
+    defer { try? handle.close() }
+    // Check the open file before allocating. The extra-byte check also rejects a file replaced
+    // or extended outside our immutable checkpoint writer while this handle is open.
+    guard try handle.seekToEnd() <= UInt64(maxBytes) else { return nil }
+    try handle.seek(toOffset: 0)
+    var data = Data()
+    while data.count <= maxBytes {
+      let count = min(64 * 1_024, maxBytes - data.count) + 1
+      guard let chunk = try handle.read(upToCount: count), !chunk.isEmpty else { break }
+      data.append(chunk)
+    }
+    guard data.count <= maxBytes else { return nil }
     guard Self.digest(data) == reference, let text = String(data: data, encoding: .utf8) else {
       throw WorkspaceRepositoryError.corruptCheckpoint
     }

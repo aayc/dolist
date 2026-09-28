@@ -10,44 +10,68 @@ extension PhoneWorkspace {
     let allPaths = entries.filter {
       $0.kind == .file && $0.path.hasSuffix(".md") && !DrawingFileName.isDrawingPath($0.path)
     }.map(\.path)
-    let cached = try await repository.notes()
+    let metadata = Dictionary(
+      uniqueKeysWithValues: try await repository.cachedDocumentMetadata().map { ($0.path, $0) })
+    let versions = Dictionary(
+      entries.map { ($0.path, $0.version) }, uniquingKeysWith: { _, new in new })
     var documents: [String: String] = [:]
     var bytes = 0
     var verified: Set<String> = []
-    // A full on-demand scan is bounded by count and bytes, and explicitly reports partial
-    // coverage. Live editors win over snapshots without being checkpointed or changed here.
-    for note in cached {
-      let text = sessions[note.path]?.editor.text ?? note.content
+    // Live text is already resident and wins over any older checkpoint. Reserve its budget
+    // before asking the repository to open files, with unsaved sessions first.
+    let live = sessions.values.filter {
+      $0.note.path != path && ($0.hasUncheckpointedEdits || $0.note.state != .synced)
+    }.sorted {
+      if $0.hasUncheckpointedEdits != $1.hasUncheckpointedEdits { return $0.hasUncheckpointedEdits }
+      return $0.note.path < $1.note.path
+    }
+    for session in live {
+      let text = session.editor.text
       guard documents.count < 200, bytes + text.utf8.count <= 16 * 1_024 * 1_024 else { continue }
-      documents[note.path] = text
+      documents[session.note.path] = text
+      bytes += text.utf8.count
+    }
+    let cached = try await repository.cachedNoteTexts(
+      limits: .init(
+        maximumDocuments: 200 - documents.count, maximumBytes: 16 * 1_024 * 1_024 - bytes),
+      excludingPaths: Set(documents.keys).union([path]))
+    guard generation == epoch else { throw WorkspaceRepositoryError.connectionChanged }
+    for note in cached.notes {
+      let text = sessions[note.metadata.path]?.editor.text ?? note.content
+      guard bytes + text.utf8.count <= 16 * 1_024 * 1_024 else { continue }
+      documents[note.metadata.path] = text
       bytes += text.utf8.count
     }
     if let client, online {
+      var fetches = 0
       for target in allPaths where target != path {
         try Task.checkCancellation()
         guard generation == epoch else { throw WorkspaceRepositoryError.connectionChanged }
-        if let local = cached.first(where: { $0.path == target }),
-          local.state != .synced
-            || entries.first(where: { $0.path == target })?.version == local.baseVersion
+        if let local = metadata[target],
+          local.state != .synced || sessions[target]?.hasUncheckpointedEdits == true
+            || (versions[target] ?? nil) == local.baseVersion
         {
           if documents[target] != nil { verified.insert(target) }
           continue
         }
-        guard documents.count < 200 || documents[target] != nil,
-          bytes < 16 * 1_024 * 1_024
+        let remaining = 16 * 1_024 * 1_024 - bytes + (documents[target]?.utf8.count ?? 0)
+        guard documents.count < 200 || documents[target] != nil, remaining > 0, fetches < 200
         else { break }
+        fetches += 1
         do {
           let note = try await client.readNote(
-            target, maxBytes: min(1_024 * 1_024, 16 * 1_024 * 1_024 - bytes))
+            target, maxBytes: min(1_024 * 1_024, remaining))
           guard generation == epoch else { throw WorkspaceRepositoryError.connectionChanged }
+          let text = sessions[target]?.editor.text ?? note.content
+          guard text.utf8.count <= remaining else { continue }
           bytes -= documents[target]?.utf8.count ?? 0
-          documents[target] = sessions[target]?.editor.text ?? note.content
-          bytes += documents[target]?.utf8.count ?? 0
+          documents[target] = text
+          bytes += text.utf8.count
           verified.insert(target)
         } catch {
           if generation != epoch { throw WorkspaceRepositoryError.connectionChanged }
           // An unread note leaves coverage partial, never a false "no mentions" claim.
-          documents[target] = nil
+          bytes -= documents.removeValue(forKey: target)?.utf8.count ?? 0
         }
       }
     }

@@ -167,16 +167,23 @@ struct PhoneExplorerView: View {
       let local = try await workspace.repository.search(request)
       try Task.checkCancellation()
       results = local.hits
-      coverage = "Downloaded notes (\(local.downloadedNotes))"
+      coverage =
+        local.isComplete
+        ? "Downloaded notes (\(local.downloadedNotes))"
+        : "Downloaded notes · limited scan (\(local.searchedNotes)/\(local.downloadedNotes))"
       if let client = workspace.client, workspace.online {
         let remote = try await client.search(request, limit: 100)
         try Task.checkCancellation()
         let dirty = Set(
-          try await workspace.repository.notes().filter { $0.state != .synced }.map(\.path))
+          try await workspace.repository.cachedDocumentMetadata().filter { $0.state != .synced }
+            .map(\.path))
         results = Array(
           (local.hits.filter { dirty.contains($0.path) }
             + remote.hits.filter { !dirty.contains($0.path) }).prefix(100))
-        coverage = "Entire vault · includes unsynced iPhone edits"
+        coverage =
+          local.isComplete
+          ? "Entire vault · includes unsynced iPhone edits"
+          : "Host results · limited scan of iPhone edits"
       }
     } catch is CancellationError {
     } catch { coverage = "Downloaded notes · host search unavailable" }

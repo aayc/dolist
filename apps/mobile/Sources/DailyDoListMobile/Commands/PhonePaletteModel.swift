@@ -96,7 +96,10 @@ final class PhonePaletteModel {
       let local = try await workspace.repository.search(request)
       guard current() else { return }
       show(local.hits)
-      coverage = "Downloaded notes (\(local.downloadedNotes))"
+      coverage =
+        local.isComplete
+        ? "Downloaded notes (\(local.downloadedNotes))"
+        : "Downloaded notes · limited scan (\(local.searchedNotes)/\(local.downloadedNotes))"
       if let client = workspace.client, workspace.online {
         let remote = try await client.search(request, limit: 100)
         let metadata = try await workspace.repository.cachedDocumentMetadata()
@@ -106,7 +109,10 @@ final class PhonePaletteModel {
           Array(
             (local.hits.filter { dirty.contains($0.path) }
               + remote.hits.filter { !dirty.contains($0.path) }).prefix(100)))
-        coverage = "Entire vault · includes unsynced iPhone edits"
+        coverage =
+          local.isComplete
+          ? "Entire vault · includes unsynced iPhone edits"
+          : "Host results · limited scan of iPhone edits"
       }
     } catch is CancellationError {
     } catch { if current() { coverage = "Downloaded notes · host search unavailable" } }
