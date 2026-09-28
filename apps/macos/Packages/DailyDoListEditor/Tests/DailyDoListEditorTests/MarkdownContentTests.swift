@@ -17,6 +17,18 @@ struct MarkdownContentTests {
     #expect(mentions.map(\.kind) == [.linked, .linked, .unlinked])
   }
 
+  @Test func linksResolveVaultWideLikeWebAndMacNotFromTheLinkingFolder() {
+    let notes = ["Projects/Today.md": "[[Plan.md]]"]
+    let paths = ["Plan.md", "Projects/Plan.md", "Projects/Today.md"]
+    #expect(
+      EditorBacklinkIndex.mentions(of: "Plan.md", notes: notes, paths: paths).map(\.kind)
+        == [.linked])
+    #expect(
+      !EditorBacklinkIndex.mentions(of: "Projects/Plan.md", notes: notes, paths: paths).contains {
+        $0.kind == .linked
+      })
+  }
+
   @Test func tableCellsFollowGFMSpacesEscapesAndAlignment() throws {
     let row = MarkdownContentLine.parse("| left \\| pipe | `a\\|b` | last |", literal: false)
     let cells = try #require(row.cells)

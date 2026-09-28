@@ -5,6 +5,7 @@ import DailyDoListEditorCore
 import DailyDoListMobileEditor
 import DailyDoListMobileKit
 import DailyDoListModels
+import DailyDoListWorkspaceCore
 import Foundation
 import UIKit
 
@@ -19,11 +20,11 @@ extension PhoneWorkspace {
     var host = MobileEditorEmbedHost()
     host.loadDrawing = { [weak self] target in
       guard let self, self.generation == epoch else { return .unreadable }
-      return await self.embeddedDrawing(target, from: path, epoch: epoch)
+      return await self.embeddedDrawing(target, epoch: epoch)
     }
     host.loadAttachment = { [weak self] target in
       guard let self, self.generation == epoch else { return .unavailable }
-      return await self.embeddedAttachment(target, from: path, epoch: epoch)
+      return await self.embeddedAttachment(target, epoch: epoch)
     }
     host.drawingController = { [weak self] in self?.drawingSessions[$0]?.controller }
     host.onOpenDrawing = { [weak self] target in Task { await self?.openDrawing(target) } }
@@ -38,7 +39,7 @@ extension PhoneWorkspace {
       guard let self else { throw WorkspaceRepositoryError.connectionChanged }
       let targets = Set(
         MobileMarkdownController.attachmentTargets(in: text).compactMap {
-          self.embedPath($0, from: path)
+          self.embedPath($0)
         })
       return try await self.attachmentUploads.uploads().filter {
         targets.contains($0.path)
@@ -48,7 +49,7 @@ extension PhoneWorkspace {
       guard let self else { return [] }
       let paths = Set(
         text.components(separatedBy: "\n").compactMap {
-          DrawingEmbed.parse(line: $0).flatMap { self.embedPath($0.target, from: path) }
+          DrawingEmbed.parse(line: $0).flatMap { self.embedPath($0.target) }
         })
       var dependencies: [String] = []
       for path in paths {
@@ -63,25 +64,23 @@ extension PhoneWorkspace {
     session.editor.setEmbedHost(host, identity: "\(profile.id):\(epoch):\(path)")
   }
 
-  /// Resolve against the downloaded tree, preferring an explicit path relative to this note.
-  /// Never convert an external URL or escaping path into a local request.
-  func embedPath(_ requested: String, from note: String) -> String? {
-    let target = requested.components(separatedBy: "#")[0]
+  /// Resolves against the downloaded tree like web and Mac: the exact vault path, else the
+  /// shortest path with that name, never relative to the linking note. Never converts an
+  /// external URL or escaping path into a local request.
+  func embedPath(_ requested: String) -> String? {
+    let target = NotePaths.wikiLinkTarget(requested)
     guard URLComponents(string: target)?.scheme == nil, !target.hasPrefix("//") else { return nil }
     let paths = entries.filter { $0.kind == .file }.map(\.path)
-    let folder = note.split(separator: "/").dropLast().joined(separator: "/")
-    let relative = folder.isEmpty ? target : folder + "/" + target
-    if let path = try? VaultPath.validated(relative), paths.contains(path) { return path }
     guard let resolved = WikiLinks.resolve(target, in: paths),
       (try? VaultPath.validated(resolved)) == resolved
     else { return nil }
     return resolved
   }
 
-  private func embeddedDrawing(_ target: String, from note: String, epoch: UInt64) async
+  private func embeddedDrawing(_ target: String, epoch: UInt64) async
     -> EditorDrawingState
   {
-    guard let path = embedPath(target, from: note), DrawingEmbed.isDrawingTarget(path) else {
+    guard let path = embedPath(target), DrawingEmbed.isDrawingTarget(path) else {
       return .missing
     }
     if let remote, online { await refreshDrawing(path, remote: remote) }
@@ -99,10 +98,10 @@ extension PhoneWorkspace {
     } catch { return .unreadable }
   }
 
-  private func embeddedAttachment(_ target: String, from note: String, epoch: UInt64) async
+  private func embeddedAttachment(_ target: String, epoch: UInt64) async
     -> MobileEditorAttachmentState
   {
-    guard let path = embedPath(target, from: note) else { return .missing }
+    guard let path = embedPath(target) else { return .missing }
     do {
       if let pending = try await pendingAttachment(path), epoch == generation {
         return .ready(pending)
@@ -157,7 +156,7 @@ extension PhoneWorkspace {
     case .external(let url):
       if LinkPolicy.isAllowed(url) { await UIApplication.shared.open(url) }
     case .note(let target, let subpath):
-      let path = target.isEmpty ? note : embedPath(target, from: note)
+      let path = target.isEmpty ? note : embedPath(target)
       guard let path else {
         error = "This linked note is not in the downloaded file list."
         return

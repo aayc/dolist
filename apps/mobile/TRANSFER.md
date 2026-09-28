@@ -31,10 +31,9 @@ where they disagree, this section wins. Still no iPhone Vim of any kind.
 - **6E:** exports stage in locked, app-owned containers that are cleaned after cancel,
   verification or restart. A retired profile is removed only as the last step.
 - **6F:** hardware Tab/Shift-Tab indent and outdent. Hidden note editors are released once saved.
-  Relative wikilinks were reviewed and left unchanged: the phone matches web and Mac for
-  `[[Name]]`, but its same-folder exact-path rule for `[[Name.md]]` (shared with the backlink
-  index) differs from them. Unifying them changes which note existing links open on every
-  client, so it waits for the user's decision.
+  Links: the user chose web and Mac's rule for every client. The phone (links, embeds, previews)
+  and the shared backlink index now resolve vault-wide (the exact path, else the shortest with
+  that name) and strip `|alias` like the Mac; the same-folder exact-path preference is gone.
 - **Verification:** 228/228 native tests, 133 MobileKit, the unsigned device build and
   `pnpm check` pass, as do CI, Security, Linux bundle and every macOS job except one. That job,
   the Mac app's own tests, intermittently crashes on an unowned reference read after its object

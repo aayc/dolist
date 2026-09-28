@@ -26,11 +26,8 @@ public enum EditorBacklinkIndex {
             }
             requested = raw.components(separatedBy: "#")[0].removingPercentEncoding ?? raw
           }
-          let folder = path.split(separator: "/").dropLast().joined(separator: "/")
-          let relative = folder.isEmpty ? requested : folder + "/" + requested
-          let resolved =
-            paths.contains(relative) ? relative : WikiLinks.resolve(requested, in: paths)
-          return resolved == target
+          // The rule every client follows: the exact vault path, else the shortest with that name.
+          return WikiLinks.resolve(requested, in: paths) == target
         }
         if linked || containsName(name, in: line) {
           mentions.append(

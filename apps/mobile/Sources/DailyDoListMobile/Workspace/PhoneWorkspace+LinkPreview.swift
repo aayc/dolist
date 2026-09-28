@@ -20,7 +20,7 @@ extension PhoneWorkspace {
       cachedNote: { [weak self] target, _ in
         guard let self, self.isCurrentLink(destination),
           let path = target.isEmpty
-            ? destination.sourcePath : self.embedPath(target, from: destination.sourcePath)
+            ? destination.sourcePath : self.embedPath(target)
         else { return nil }
         if let session = self.sessions[path] {
           return PhoneCachedNotePreview(path: path, text: session.editor.text)
