@@ -1,5 +1,10 @@
 # Native iPhone implementation handoff
 
+**Transfer boundary (2026-09-27):** the user requested a complete handoff for another agent.
+Read `TRANSFER.md` for the current snapshot, confirmed defects, unintegrated stream commits and
+remaining acceptance. Implementation in this task has stopped; the continuation heartbeat is paused.
+Historical entries below retain their original evidence and may describe work later completed.
+
 ## Durable user instruction (2026-09-27)
 
 The user explicitly authorized full and complete native iPhone development, superseding the
@@ -52,7 +57,7 @@ No feature is complete merely because its API or a placeholder screen exists.
 | 4 Agent workspace | In progress | Shared AgentCore and native screens integrated; Inbox/result/artifact checked; receipt-aware actions and settings/hosts integrated; full caches and action CUA remain |
 | 5 Drawings/content | In progress | Shared native canvas, images and arrangement implemented; app persistence/embeds and remaining parity/B0/P remain |
 | 6 Phone integration | In progress | Native keyboard/accessory, capture/Siri, local notification catch-up; Vim explicitly excluded |
-| 7 Hardening | Not started | All automated gates, computer-use feature matrix, recovery/accessibility/performance |
+| 7 Hardening | In progress | All automated gates, computer-use feature matrix, recovery/accessibility/performance |
 | 8 Paid push/distribution | Not applicable | User has no paid account; keep optional design separate |
 
 ## Active ownership and next actions
