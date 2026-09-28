@@ -3,10 +3,10 @@ name: macOS app
 # The native Swift app (apps/macos), in parallel jobs: the Swift packages' tests in three groups,
 # the integration tests against the real daemon (mock agent), and the iOS build of the shared
 # packages. Each Swift job restores its SwiftPM build directory from a cache, so a run only
-# recompiles what changed. The release "Daily Do List.app" with the bundled daemon is built (and
-# uploaded) on main, or on demand with the `release` input. Runs when the app, the daemon, what the
-# daemon bundles or the vim behavior vectors the Swift engine replays change (keep both path lists
-# in sync).
+# recompiles what changed, and the last job deletes the caches a run superseded. The release
+# "Daily Do List.app" with the bundled daemon is built (and uploaded) on main, or on demand with
+# the `release` input. Runs when the app, the daemon, what the daemon bundles or the vim behavior
+# vectors the Swift engine replays change (keep both path lists in sync).
 on:
   push:
     branches: [main]
@@ -141,6 +141,16 @@ jobs:
         run: |
           # shellcheck disable=SC2086
           apps/macos/scripts/test.sh $PACKAGES
+
+      - name: Crash reports
+        # A test process that crashes (not a failed expectation) leaves only its report's stack.
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: crash-reports-${{ matrix.group }}
+          path: ~/Library/Logs/DiagnosticReports/*.ips
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Smoke-test ddl-computer
         if: matrix.group == 'others'
@@ -303,3 +313,30 @@ jobs:
           path: "apps/macos/build/Daily Do List.zip"
           if-no-files-found: error
           retention-days: 14
+
+  prune-caches:
+    name: Prune superseded build caches
+    # Every changed commit saves new build caches; the older ones on the same branch only crowd
+    # out the caches other branches restore from (the repository's cache space is limited).
+    # Fork pull requests get a read-only token, so they can't delete anything.
+    needs: [packages, integration, release]
+    if: >-
+      !cancelled() && (github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Keep the newest build cache of each job on this branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REF: ${{ github.ref }}
+        # Keys end in the sources' 40-hex git hash; everything before it names the job's cache.
+        run: |
+          gh cache list --ref "$REF" --limit 1000 --json id,key,createdAt --jq '
+            [.[] | select(.key | startswith("swiftpm-"))]
+            | group_by(.key | sub("-[0-9a-f]{40}$"; ""))
+            | map(sort_by(.createdAt) | .[:-1][]) | .[].id' |
+            while read -r id; do gh cache delete "$id"; done

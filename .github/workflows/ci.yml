@@ -360,3 +360,30 @@ jobs:
         with:
           name: evals
           step: save
+
+  prune-caches:
+    name: Prune superseded turbo caches
+    # Each run saves every job's turbo cache under a new key; jobs restore only the newest, so the
+    # older ones on the same branch just crowd out other branches' caches. Fork pull requests get
+    # a read-only token, so they can't delete anything.
+    needs: [check, test, test-macos, bench, e2e, perf, vim, evals-mock]
+    if: >-
+      !cancelled() && (github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Keep the newest turbo cache of each job on this branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REF: ${{ github.ref }}
+        # Keys end in "-<run id>-<attempt>"; everything before it names the job's cache.
+        run: |
+          gh cache list --ref "$REF" --limit 1000 --json id,key,createdAt --jq '
+            [.[] | select(.key | startswith("turbo-"))]
+            | group_by(.key | sub("-[0-9]+-[0-9]+$"; ""))
+            | map(sort_by(.createdAt) | .[:-1][]) | .[].id' |
+            while read -r id; do gh cache delete "$id"; done
