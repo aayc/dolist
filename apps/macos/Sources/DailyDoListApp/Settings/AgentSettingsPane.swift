@@ -71,15 +71,16 @@ struct AgentSettingsPane: View {
           .pointingHandCursor()
         }
         SettingsNote(text: "What runs the orchestrator and its subagents.")
-        let field = AgentModelField(agent)
-        CommitTextField(
-          title: field.title, value: field.value, prompt: field.prompt, monospaced: true,
-          required: true
-        ) {
-          update(field.patch($0))
+        ForEach(AgentModelField.fields(agent), id: \.self) { field in
+          CommitTextField(
+            title: field.title, value: field.value, prompt: field.prompt, monospaced: true,
+            required: true
+          ) {
+            update(field.patch($0))
+          }
+          .id("\(field.harness)-\(field.role)")
+          SettingsNote(text: field.note)
         }
-        .id(field.harness)
-        SettingsNote(text: field.note)
         LabeledContent("Safety judge") {
           Text(agent.judgeModel).font(.system(.body, design: .monospaced)).textSelection(.enabled)
         }
@@ -124,36 +125,57 @@ extension AgentHarnessKind {
   }
 }
 
-/// The model field the Agent pane shows: the configured harness's model.
-struct AgentModelField: Equatable {
+/// A model field the Agent pane shows for the configured harness: subagents, the orchestrator,
+/// hard tasks.
+struct AgentModelField: Hashable {
+  enum Role: Hashable, CaseIterable { case subagent, orchestrator, deep }
+
   let harness: AgentHarnessKind
+  let role: Role
   let title: String
   let value: String
   let prompt: String
   let note: String
 
-  init(_ agent: AgentSettings) {
+  static func fields(_ agent: AgentSettings) -> [AgentModelField] {
+    Role.allCases.map { AgentModelField(agent, role: $0) }
+  }
+
+  init(_ agent: AgentSettings, role: Role) {
     harness = agent.harness
-    switch agent.harness {
-    case .pi:
-      title = "OpenRouter model"
-      value = agent.model
-      prompt = AgentSettings.defaultModel
-      note = "An OpenRouter model id, e.g. \(AgentSettings.defaultModel)."
-    case .cursor:
-      title = "Cursor model"
-      value = agent.cursorModel
-      prompt = AgentSettings.defaultCursorModel
+    self.role = role
+    let cursor = agent.harness == .cursor
+    switch role {
+    case .subagent:
+      title = "Subagent model"
+      value = cursor ? agent.cursorModel : agent.model
+      prompt = cursor ? AgentSettings.defaultCursorModel : AgentSettings.defaultModel
       note =
-        "A model from `agent models`, e.g. claude-opus-5-5 or composer-2.5. The CLI runs each model's preset: effort and fast variants can't be picked."
+        cursor
+        ? "A model from `agent models`, e.g. \(AgentSettings.defaultCursorModel) or composer-2.5. The CLI runs each model's preset: effort and fast variants can't be picked."
+        : "An OpenRouter model id, e.g. \(AgentSettings.defaultModel)."
+    case .orchestrator:
+      title = "Orchestrator model"
+      value = cursor ? agent.cursorOrchestratorModel : agent.orchestratorModel
+      prompt = cursor ? AgentSettings.defaultCursorModel : AgentSettings.defaultModel
+      note = "Decides what to do with each line. A fast model keeps the note responsive."
+    case .deep:
+      title = "Hard-task model"
+      value = cursor ? agent.cursorDeepModel : agent.deepModel
+      prompt = cursor ? AgentSettings.defaultCursorDeepModel : AgentSettings.defaultModel
+      note = "For tasks the orchestrator marks hard, like in-depth research. A stronger model."
     }
   }
 
-  /// Saves `model` as this harness's model.
+  /// Saves `model` as this field's model.
   func patch(_ model: String) -> SettingsPatch.AgentPatch {
-    switch harness {
-    case .pi: SettingsPatch.AgentPatch(model: model)
-    case .cursor: SettingsPatch.AgentPatch(cursorModel: model)
+    switch (harness, role) {
+    case (.pi, .subagent): SettingsPatch.AgentPatch(model: model)
+    case (.pi, .orchestrator): SettingsPatch.AgentPatch(orchestratorModel: model)
+    case (.pi, .deep): SettingsPatch.AgentPatch(deepModel: model)
+    case (.cursor, .subagent): SettingsPatch.AgentPatch(cursorModel: model)
+    case (.cursor, .orchestrator): SettingsPatch.AgentPatch(cursorOrchestratorModel: model)
+    case (.cursor, .deep): SettingsPatch.AgentPatch(cursorDeepModel: model)
     }
   }
 }

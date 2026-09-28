@@ -240,6 +240,8 @@ export interface SpawnSubagentInput {
   goal: string;
   instructions?: string;
   capabilities: Capability[];
+  /** A hard task, for the stronger model. */
+  deep?: boolean;
 }
 export interface PostCommentInput {
   taskId: string;

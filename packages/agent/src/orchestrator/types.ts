@@ -35,4 +35,6 @@ export interface SubagentSpec {
   /** Extra instructions/constraints from the orchestrator. */
   instructions?: string;
   capabilities: Capability[];
+  /** A hard task: the subagent runs on the stronger model (`agentModel`'s `deep` role). */
+  deep?: boolean;
 }

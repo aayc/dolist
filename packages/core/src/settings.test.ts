@@ -4,11 +4,15 @@ import {
   APPROVAL_POLICIES,
   agentModel,
   DEFAULT_APPROVAL_POLICY,
+  DEFAULT_CURSOR_DEEP_MODEL,
   DEFAULT_CURSOR_MODEL,
   DEFAULT_MODEL,
   DEFAULT_SETTINGS,
+  type DeepPartial,
+  inheritRoleModels,
   mergeSettings,
 } from "./settings";
+import type { AppSettings } from "./wire";
 
 describe("editor settings", () => {
   it("default to vim off with an empty vimrc", () => {
@@ -32,6 +36,40 @@ describe("agent settings", () => {
       model: DEFAULT_MODEL,
       cursorModel: DEFAULT_CURSOR_MODEL,
       judgeModel: DEFAULT_MODEL,
+    });
+  });
+
+  it("agentModel picks each role's model of the configured harness", () => {
+    const agent = {
+      ...DEFAULT_SETTINGS.agent,
+      orchestratorModel: "vendor/fast",
+      deepModel: "vendor/strong",
+      cursorOrchestratorModel: "claude-sonnet-5-5",
+      cursorDeepModel: "claude-opus-5-5",
+    };
+    expect(agentModel(agent, "orchestrator")).toBe("vendor/fast");
+    expect(agentModel(agent, "deep")).toBe("vendor/strong");
+    expect(agentModel({ ...agent, harness: "cursor" }, "orchestrator")).toBe("claude-sonnet-5-5");
+    expect(agentModel({ ...agent, harness: "cursor" }, "deep")).toBe("claude-opus-5-5");
+  });
+
+  it("role models nobody set follow the subagent model the user picked", () => {
+    const inherit = (agent: DeepPartial<AppSettings>["agent"]) =>
+      mergeSettings(DEFAULT_SETTINGS, inheritRoleModels({ agent })).agent;
+    expect(inherit({ model: "vendor/a", cursorModel: "gpt-5.5" })).toMatchObject({
+      orchestratorModel: "vendor/a",
+      deepModel: "vendor/a",
+      cursorOrchestratorModel: "gpt-5.5",
+      cursorDeepModel: "gpt-5.5",
+    });
+    expect(inherit({ cursorModel: "gpt-5.5", cursorDeepModel: "claude-opus-5-5" })).toMatchObject({
+      cursorOrchestratorModel: "gpt-5.5",
+      cursorDeepModel: "claude-opus-5-5",
+      orchestratorModel: DEFAULT_MODEL,
+    });
+    expect(inherit({})).toMatchObject({
+      cursorOrchestratorModel: DEFAULT_CURSOR_MODEL,
+      cursorDeepModel: DEFAULT_CURSOR_DEEP_MODEL,
     });
   });
 

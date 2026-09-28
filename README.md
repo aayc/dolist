@@ -103,7 +103,8 @@ change it with `DDL_MODEL` or in Settings → Agent.
 
 **Run the agent on the Cursor CLI instead:** install it (`curl https://cursor.com/install -fsS |
 bash`), sign in with your Cursor account (`agent login`), then pick the Cursor harness in Settings
-→ Agent. Its model defaults to Claude Opus 5.5 (`claude-opus-5-5`); any model `agent models` lists
+→ Agent. The orchestrator and subagents default to Claude Sonnet 5.5 (`claude-sonnet-5-5`) and tasks
+the orchestrator marks hard to Claude Opus 5.5 (`claude-opus-5-5`); any model `agent models` lists
 works. No OpenRouter key is needed (with one, it still powers the safety judge and web search). The
 CLI's own tools stay off: agents use this app's tools, checked by the same safety gate
 ([details](docs/AGENT_SYSTEM.md#5-the-cursor-cli-harness)).

@@ -369,7 +369,8 @@ include `DDL_MODEL` from the daemon config).
 { version: 1, theme?, editor?: { vimMode?, vimrc? (≤16384), livePreview?, readableLineLength?,
   fontSize? (8–48), spellcheck?, showLineNumbers? }, dailyNotes?/weeklyNotes?: { folder? (≤512), format? (≤128),
   template? (≤512) }, agent?: { enabled?, settleMs? (0–120000), maxConcurrentSubagents? (1–32),
-  harness? ("pi" | "cursor"), model?, cursorModel?, judgeModel? (1–200 chars, trimmed),
+  harness? ("pi" | "cursor"), model?, orchestratorModel?, deepModel?, cursorModel?,
+  cursorOrchestratorModel?, cursorDeepModel?, judgeModel? (1–200 chars, trimmed),
   watch?: { pastDays?, futureDays? (0–366) }, actOnExistingTasks?, approvalTimeoutMs? (1 min–30 days),
   approvalPolicy? ("ask_every_action" | "ask_risky" | "ask_high_risk" | "run_everything") },
   remote?: { alwaysOnMachine?: { name, url } | null } }
@@ -387,10 +388,14 @@ include `DDL_MODEL` from the daemon config).
   stays in the file. Agents can't write this file: changing anything in `.daily-do-list/` is a hard
   deny of the safety rules.
 
-- **Agent harness:** `agent.harness` picks what runs the agent: `pi` on the OpenRouter
-  `agent.model`, or `cursor` (the Cursor CLI) on `agent.cursorModel`. `judgeModel` is an OpenRouter
-  model with either harness. Files written before these keys existed have neither and load with
-  `pi` and the default Cursor model (`claude-opus-5-5`); a harness this version doesn't know
+- **Agent harness:** `agent.harness` picks what runs the agent: `pi` on OpenRouter models, or
+  `cursor` (the Cursor CLI). Each has a model per role: subagents (`model` / `cursorModel`), the
+  orchestrator (`orchestratorModel` / `cursorOrchestratorModel`) and tasks the orchestrator marks
+  hard (`deepModel` / `cursorDeepModel`). A role model the file doesn't set follows the file's
+  subagent model (every role ran on it before roles existed), else its default. `judgeModel` is an
+  OpenRouter model with either harness. Files written before the harness existed load with `pi`
+  and the default Cursor models (`claude-sonnet-5-5`, hard tasks `claude-opus-5-5`); a harness this
+  version doesn't know
   (written by a newer app) falls back
   to `pi` like any other invalid value, and stays in the file.
 

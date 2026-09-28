@@ -695,7 +695,7 @@ export class Orchestrator {
       role: "orchestrator",
       systemPrompt: buildOrchestratorSystemPrompt(),
       tools,
-      model: agentModel(this.options.getSettings().agent),
+      model: agentModel(this.options.getSettings().agent, "orchestrator"),
       thinking: "low",
       cwd: this.options.cwd,
       beforeToolCall: this.options.beforeToolCall,
@@ -1053,6 +1053,7 @@ export class Orchestrator {
           goal: input.goal,
           ...(input.instructions ? { instructions: input.instructions } : {}),
           capabilities: granted,
+          ...(input.deep ? { deep: true } : {}),
         };
         const result = await subagents.spawn(spec);
         touch(input.taskId);

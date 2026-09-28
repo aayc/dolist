@@ -29,11 +29,26 @@ export type ApprovalPolicy = (typeof APPROVAL_POLICIES)[number];
 export const DEFAULT_APPROVAL_POLICY: ApprovalPolicy = "ask_risky";
 
 export const DEFAULT_MODEL = "deepseek/deepseek-v4.1-flash";
-export const DEFAULT_CURSOR_MODEL = "claude-opus-5-5";
+export const DEFAULT_CURSOR_MODEL = "claude-sonnet-5-5";
+export const DEFAULT_CURSOR_DEEP_MODEL = "claude-opus-5-5";
 
-/** The model id the configured harness runs its conversations on. */
-export function agentModel(agent: AgentSettings): string {
-  return agent.harness === "cursor" ? agent.cursorModel : agent.model;
+/**
+ * Who a conversation is for: the orchestrator, a subagent, or a subagent on a task the orchestrator
+ * marked hard (`spawn_subagent`'s `deep`).
+ */
+export type AgentModelRole = "orchestrator" | "subagent" | "deep";
+
+/** The model id the configured harness runs `role`'s conversations on. */
+export function agentModel(agent: AgentSettings, role: AgentModelRole = "subagent"): string {
+  const cursor = agent.harness === "cursor";
+  switch (role) {
+    case "orchestrator":
+      return cursor ? agent.cursorOrchestratorModel : agent.orchestratorModel;
+    case "deep":
+      return cursor ? agent.cursorDeepModel : agent.deepModel;
+    case "subagent":
+      return cursor ? agent.cursorModel : agent.model;
+  }
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -55,7 +70,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
     maxConcurrentSubagents: 3,
     harness: "pi",
     model: DEFAULT_MODEL,
+    orchestratorModel: DEFAULT_MODEL,
+    deepModel: DEFAULT_MODEL,
     cursorModel: DEFAULT_CURSOR_MODEL,
+    cursorOrchestratorModel: DEFAULT_CURSOR_MODEL,
+    cursorDeepModel: DEFAULT_CURSOR_DEEP_MODEL,
     judgeModel: DEFAULT_MODEL,
     watch: { pastDays: 0, futureDays: 7 },
     actOnExistingTasks: true,
@@ -72,6 +91,25 @@ export type DeepPartial<T> = {
       ? DeepPartial<T[K]>
       : T[K];
 };
+
+/**
+ * Stored overrides with the role models nobody set following the subagent model the user picked,
+ * as they did before the orchestrator and hard tasks had models of their own.
+ */
+export function inheritRoleModels(overrides: DeepPartial<AppSettings>): DeepPartial<AppSettings> {
+  const agent = overrides.agent;
+  if (!agent?.model && !agent?.cursorModel) return overrides;
+  return {
+    ...overrides,
+    agent: {
+      ...(agent.model ? { orchestratorModel: agent.model, deepModel: agent.model } : {}),
+      ...(agent.cursorModel
+        ? { cursorOrchestratorModel: agent.cursorModel, cursorDeepModel: agent.cursorModel }
+        : {}),
+      ...agent,
+    },
+  };
+}
 
 /** Deep-merges a partial patch into settings. Unknown keys are dropped; arrays are replaced. */
 export function mergeSettings<T extends object>(base: T, patch: DeepPartial<T> | undefined): T {

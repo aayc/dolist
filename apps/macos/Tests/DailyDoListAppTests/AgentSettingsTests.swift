@@ -7,25 +7,28 @@ import Testing
 @Suite("Agent settings")
 struct AgentSettingsTests {
 
-  @Test func theModelFieldIsTheConfiguredHarnesssModel() {
+  @Test func theModelFieldsAreTheConfiguredHarnesssRoleModels() {
     var agent = AgentSettings.defaults
     agent.model = "vendor/model-a"
     agent.cursorModel = "gpt-5.5"
-    let pi = AgentModelField(agent)
-    #expect(
-      pi.title == "OpenRouter model" && pi.value == "vendor/model-a"
-        && pi.prompt == AgentSettings.defaultModel)
-    #expect(pi.patch("vendor/model-b") == SettingsPatch.AgentPatch(model: "vendor/model-b"))
+    agent.cursorDeepModel = "claude-opus-5-5"
+    let pi = AgentModelField.fields(agent)
+    #expect(pi.map(\.title) == ["Subagent model", "Orchestrator model", "Hard-task model"])
+    #expect(pi[0].value == "vendor/model-a" && pi[0].prompt == AgentSettings.defaultModel)
+    #expect(pi[0].patch("vendor/model-b") == SettingsPatch.AgentPatch(model: "vendor/model-b"))
+    #expect(pi[1].patch("m") == SettingsPatch.AgentPatch(orchestratorModel: "m"))
+    #expect(pi[2].patch("m") == SettingsPatch.AgentPatch(deepModel: "m"))
 
     agent.harness = .cursor
-    let cursor = AgentModelField(agent)
+    let cursor = AgentModelField.fields(agent)
+    #expect(cursor[0].value == "gpt-5.5" && cursor[0].prompt == "claude-sonnet-5-5")
+    #expect(cursor[0].note.contains("agent models") && cursor[0].note.contains("preset"))
     #expect(
-      cursor.title == "Cursor model" && cursor.value == "gpt-5.5"
-        && cursor.prompt == "claude-opus-5-5")
-    #expect(cursor.note.contains("agent models") && cursor.note.contains("preset"))
-    #expect(
-      cursor.patch("gpt-5.5[reasoning=high]")
+      cursor[0].patch("gpt-5.5[reasoning=high]")
         == SettingsPatch.AgentPatch(cursorModel: "gpt-5.5[reasoning=high]"))
+    #expect(cursor[2].value == "claude-opus-5-5" && cursor[2].prompt == "claude-opus-5-5")
+    #expect(cursor[1].patch("m") == SettingsPatch.AgentPatch(cursorOrchestratorModel: "m"))
+    #expect(cursor[2].patch("m") == SettingsPatch.AgentPatch(cursorDeepModel: "m"))
   }
 
   @Test func requiredFieldsCommitTrimmedTextAndNeverBlankText() {
@@ -49,13 +52,14 @@ struct AgentSettingsTests {
     let store = SettingsStore()
     store.client = client
     await store.update(SettingsPatch(agent: .init(harness: .cursor)))
-    await store.update(SettingsPatch(agent: AgentModelField(store.settings.agent).patch("gpt-5.5")))
+    await store.update(
+      SettingsPatch(agent: AgentModelField.fields(store.settings.agent)[0].patch("gpt-5.5")))
     #expect(
       store.settings.agent.harness == .cursor && store.settings.agent.cursorModel == "gpt-5.5")
     #expect(client.withState { $0.settings.agent.agentModel } == "gpt-5.5")
 
     await store.update(SettingsPatch(agent: .init(harness: .pi)))
-    #expect(AgentModelField(store.settings.agent).value == AgentSettings.defaultModel)
+    #expect(AgentModelField.fields(store.settings.agent)[0].value == AgentSettings.defaultModel)
     #expect(store.settings.agent.cursorModel == "gpt-5.5")
   }
 

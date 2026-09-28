@@ -37,6 +37,10 @@ const MODELS = [
   { modelId: "composer-2.5[fast=true]", name: "Composer 2.5" },
   { modelId: "gpt-5.5[context=272k,reasoning=medium,fast=false]", name: "GPT-5.5" },
   { modelId: "claude-opus-5-5[context=300k,effort=medium,fast=false]", name: "Claude Opus 5.5" },
+  {
+    modelId: "claude-sonnet-5-5[context=300k,effort=medium,fast=false]",
+    name: "Claude Sonnet 5.5",
+  },
   { modelId: "sonnet-4.6[thinking=true]", name: "Sonnet 4.6" },
 ];
 

@@ -115,9 +115,9 @@ format, template), `.obsidian/app.json` (vim mode, live preview, readable line l
 numbers, spellcheck) and `.obsidian/appearance.json` (theme). With nothing to import it writes no
 file, so a new device joining a synced vault takes the vault's settings instead of resetting them.
 
-`agent.harness` picks what runs the agent: `pi` on the OpenRouter model `agent.model`, or `cursor`
-(the Cursor CLI) on `agent.cursorModel`; the safety judge's `agent.judgeModel` is an OpenRouter
-model with either. `agent.approvalPolicy` reaches the runtime's safety gate from the next tool call
+`agent.harness` picks what runs the agent: `pi` on OpenRouter models, or `cursor` (the Cursor CLI),
+each with a model for subagents, the orchestrator and hard tasks (`agentModel` in `@ddl/core`); the
+safety judge's `agent.judgeModel` is an OpenRouter model with either. `agent.approvalPolicy` reaches the runtime's safety gate from the next tool call
 (see `packages/agent/src/safety/README.md`).
 
 ## Security model

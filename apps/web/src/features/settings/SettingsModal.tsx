@@ -21,7 +21,7 @@ import { useVimStore } from "../../state/vim-store";
 import { Modal } from "../overlays/Modal";
 import type { RemoteSectionKey } from "../remote/settings/RemoteSection";
 import { ApprovalPolicySetting } from "./ApprovalPolicySetting";
-import { HARNESS_OPTIONS, shownHarness } from "./agent-harness";
+import { HARNESS_OPTIONS, MODEL_FIELDS, MODEL_ROLE_TEXT, shownHarness } from "./agent-harness";
 import { ComputerUseSection } from "./ComputerUseSection";
 import { dailyPreview } from "./daily-preview";
 import { draftToCommit } from "./draft";
@@ -455,47 +455,38 @@ function AgentSection() {
           ))}
         </fieldset>
       </Setting>
-      {harness === "cursor" ? (
+      {MODEL_FIELDS[harness].map(({ role, key, placeholder, testId }) => (
         <Setting
-          key="cursor"
-          name="Cursor model"
+          key={key}
+          name={MODEL_ROLE_TEXT[role].name}
           description={
-            <>
-              A model from <code>agent models</code>, e.g. <code>claude-opus-5-5</code> or{" "}
-              <code>composer-2.5</code>. The CLI runs each model&apos;s preset: effort and fast
-              variants can&apos;t be picked.
-            </>
+            role === "subagent" ? (
+              harness === "cursor" ? (
+                <>
+                  A model from <code>agent models</code>, e.g. <code>{DEFAULT_CURSOR_MODEL}</code>{" "}
+                  or <code>composer-2.5</code>. The CLI runs each model&apos;s preset: effort and
+                  fast variants can&apos;t be picked.
+                </>
+              ) : (
+                <>
+                  An OpenRouter model id, e.g. <code>{DEFAULT_MODEL}</code>.
+                </>
+              )
+            ) : (
+              MODEL_ROLE_TEXT[role].description
+            )
           }
         >
           <DraftInput
-            value={settings.cursorModel}
-            label="Cursor model"
-            placeholder={DEFAULT_CURSOR_MODEL}
-            testId="setting-cursor-model"
+            value={settings[key]}
+            label={MODEL_ROLE_TEXT[role].name}
+            placeholder={placeholder}
+            testId={testId}
             required
-            onCommit={(cursorModel) => void updateSettings({ agent: { cursorModel } })}
+            onCommit={(model) => void updateSettings({ agent: { [key]: model } })}
           />
         </Setting>
-      ) : (
-        <Setting
-          key="pi"
-          name="OpenRouter model"
-          description={
-            <>
-              An OpenRouter model id, e.g. <code>{DEFAULT_MODEL}</code>.
-            </>
-          }
-        >
-          <DraftInput
-            value={settings.model}
-            label="OpenRouter model"
-            placeholder={DEFAULT_MODEL}
-            testId="setting-model"
-            required
-            onCommit={(model) => void updateSettings({ agent: { model } })}
-          />
-        </Setting>
-      )}
+      ))}
       <Setting
         name="Settle delay"
         description="Quiet time (ms) after you stop editing a task before the agent looks at it."

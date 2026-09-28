@@ -519,7 +519,7 @@ describe("CursorHarness (fake CLI)", { timeout: SPAWN_TIMEOUT_MS }, () => {
     const session = await s.create({ model: DEFAULT_CURSOR_MODEL });
     await session.prompt("!model");
     expect(lastText(s.events)).toBe(
-      "model: claude-opus-5-5[context=300k,effort=medium,fast=false]",
+      "model: claude-sonnet-5-5[context=300k,effort=medium,fast=false]",
     );
     expect(warnings).toEqual([]);
     const variant = await s.create({
@@ -633,7 +633,7 @@ describe("CursorHarness (fake CLI)", { timeout: SPAWN_TIMEOUT_MS }, () => {
     await withParams.prompt("!model");
     expect(lastText(s.events)).toBe("model: gpt-5.5[context=272k,reasoning=medium,fast=false]");
     await expect(s.create({ model: "no-such-model" })).rejects.toThrow(
-      /"no-such-model" isn't available.*composer-2\.5, gpt-5\.5, claude-opus-5-5, sonnet-4\.6/,
+      /"no-such-model" isn't available.*composer-2\.5, gpt-5\.5, claude-opus-5-5, claude-sonnet-5-5, sonnet-4\.6/,
     );
     expect(await readdir(path.join(s.home, "cursor", "sessions"))).toHaveLength(2);
   });

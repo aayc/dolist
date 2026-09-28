@@ -572,7 +572,7 @@ export class SubagentManager {
         role: "subagent",
         systemPrompt: buildSubagentSystemPrompt({ now: this.now(), capabilities }),
         tools,
-        model: agentModel(this.options.getSettings().agent),
+        model: agentModel(this.options.getSettings().agent, run.spec.deep ? "deep" : "subagent"),
         thinking: "medium",
         cwd: run.workspace.dir,
         builtinTools: {

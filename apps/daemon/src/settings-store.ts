@@ -12,6 +12,7 @@ import {
   type DeepPartial,
   Emitter,
   errorMessage,
+  inheritRoleModels,
   isRecord,
   type Logger,
   mergeSettings,
@@ -195,7 +196,12 @@ function resolveSettings(
 ): ResolvedSettings {
   const { overrides, invalid, unknown } = resolvePersistedSettings(stored);
   const { usable, fallback } = withoutUnusableSections(defaults, overrides);
-  return { settings: mergeSettings(defaults, usable), invalid, unknown, fallback };
+  return {
+    settings: mergeSettings(defaults, inheritRoleModels(usable)),
+    invalid,
+    unknown,
+    fallback,
+  };
 }
 
 function withoutUnusableSections(

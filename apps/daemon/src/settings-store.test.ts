@@ -175,6 +175,25 @@ describe("settings store", () => {
     expect((await open(storage)).get()).toEqual(pi);
   });
 
+  it("runs every role on a stored model until the user picks one for the role", async () => {
+    const storage = vault({
+      [SETTINGS_PATH]: JSON.stringify({
+        version: 1,
+        agent: { harness: "cursor", cursorModel: "claude-opus-5-5" },
+      }),
+    });
+    const store = await open(storage);
+    expect(agentModel(store.get().agent, "orchestrator")).toBe("claude-opus-5-5");
+    expect(agentModel(store.get().agent, "deep")).toBe("claude-opus-5-5");
+
+    const picked = await store.update({
+      agent: { cursorModel: "claude-sonnet-5-5", cursorDeepModel: "claude-opus-5-5" },
+    });
+    expect(agentModel(picked.agent, "subagent")).toBe("claude-sonnet-5-5");
+    expect(agentModel(picked.agent, "orchestrator")).toBe("claude-sonnet-5-5");
+    expect(agentModel(picked.agent, "deep")).toBe("claude-opus-5-5");
+  });
+
   it("rejects an unknown harness and unusable Cursor models, storing nothing", async () => {
     const storage = vault();
     const store = await open(storage);
@@ -320,6 +339,9 @@ describe("golden settings fixtures through the real settings store", () => {
         ...DEFAULT_SETTINGS.agent,
         settleMs: 4000,
         model: "vendor/model-a",
+        // Saved before role models: the orchestrator and hard tasks run on it too.
+        orchestratorModel: "vendor/model-a",
+        deepModel: "vendor/model-a",
         watch: { pastDays: 0, futureDays: 2 },
       },
     });
@@ -367,6 +389,8 @@ describe("golden settings fixtures through the real settings store", () => {
         ...DEFAULT_SETTINGS.agent,
         harness: "cursor",
         cursorModel: "gpt-5.5[reasoning=high]",
+        cursorOrchestratorModel: "gpt-5.5[reasoning=high]",
+        cursorDeepModel: "gpt-5.5[reasoning=high]",
         judgeModel: "vendor/judge-a",
       },
     });

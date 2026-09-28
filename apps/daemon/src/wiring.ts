@@ -34,7 +34,12 @@ type AgentModule = typeof import("@ddl/agent");
 /** Code defaults overlaid with daemon config, so `DDL_MODEL` applies until the vault overrides it. */
 export function settingsDefaults(config: Pick<DaemonConfig, "model">): AppSettings {
   return mergeSettings(DEFAULT_SETTINGS, {
-    agent: { model: config.model, judgeModel: config.model },
+    agent: {
+      model: config.model,
+      orchestratorModel: config.model,
+      deepModel: config.model,
+      judgeModel: config.model,
+    },
   });
 }
 

@@ -87,24 +87,34 @@ export function createOrchestratorTools(host: OrchestratorToolHost): ToolSpec[] 
           uniqueItems: true,
           description: 'Minimal capabilities, e.g. ["web"] for research.',
         },
+        deep: {
+          type: "boolean",
+          description:
+            "true for a hard task (deep multi-source research, tricky reasoning, long careful multi-step work): it runs on a stronger, slower model. Leave it out for everything else.",
+        },
       },
       required: ["taskId", "goal", "capabilities"],
       additionalProperties: false,
     },
     safety: {
       ...INTERNAL,
-      describe: (input) => `Delegate: ${truncate(String(field(input, "goal")), 120)}`,
+      describe: (input) =>
+        `Delegate${field(input, "deep") === true ? " (hard task)" : ""}: ${truncate(String(field(input, "goal")), 120)}`,
     },
     execute: (input) =>
       guarded(async () => {
         const args = asInput(input);
         const instructions = optionalString(args, "instructions", { maxLength: 8_000 });
+        if (args.deep !== undefined && typeof args.deep !== "boolean") {
+          throw new ToolInputError('"deep" must be true or false.');
+        }
         return textResult(
           await host.spawnSubagent({
             taskId: requireString(args, "taskId"),
             goal: requireString(args, "goal", { maxLength: 1_000 }),
             ...(instructions ? { instructions } : {}),
             capabilities: requireEnumArray(args, "capabilities", CAPABILITIES),
+            ...(args.deep === true ? { deep: true } : {}),
           }),
         );
       }),

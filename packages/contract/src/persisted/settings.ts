@@ -56,7 +56,11 @@ export const PersistedSettingsOverridesSchema = z
         maxConcurrentSubagents: z.int().min(1).max(32),
         harness: z.enum(AGENT_HARNESS_KINDS),
         model: ModelId,
+        orchestratorModel: ModelId,
+        deepModel: ModelId,
         cursorModel: ModelId,
+        cursorOrchestratorModel: ModelId,
+        cursorDeepModel: ModelId,
         judgeModel: ModelId,
         watch: z
           .object({ pastDays: z.int().min(0).max(366), futureDays: z.int().min(0).max(366) })

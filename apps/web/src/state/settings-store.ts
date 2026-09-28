@@ -1,4 +1,10 @@
-import { type AppSettings, DEFAULT_SETTINGS, type DeepPartial, mergeSettings } from "@ddl/core";
+import {
+  type AppSettings,
+  DEFAULT_SETTINGS,
+  type DeepPartial,
+  inheritRoleModels,
+  mergeSettings,
+} from "@ddl/core";
 import { preloadVim } from "@ddl/editor";
 import { create } from "zustand";
 import { reportError } from "../lib/report-error";
@@ -32,9 +38,12 @@ export function getSettings(): AppSettings {
   return useSettingsStore.getState().settings;
 }
 
-/** The daemon's settings; fields an older daemon doesn't send keep their defaults. */
+/**
+ * The daemon's settings; fields an older daemon doesn't send keep their defaults, except its role
+ * models, which were its subagent model.
+ */
 export function applySettings(settings: AppSettings, loaded = true): void {
-  const next = mergeSettings(DEFAULT_SETTINGS, settings);
+  const next = mergeSettings(DEFAULT_SETTINGS, inheritRoleModels(settings));
   useSettingsStore.setState({
     settings: warmUp(next),
     loaded: loaded || useSettingsStore.getState().loaded,

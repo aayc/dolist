@@ -52,6 +52,8 @@ export const PersistedSubagentSpecSchema = z.object({
   goal: z.string(),
   instructions: z.string().optional(),
   capabilities: z.array(PersistedCapabilitySchema),
+  /** A hard task, run on the stronger model. */
+  deep: z.boolean().optional(),
 });
 export type PersistedSubagentSpec = z.infer<typeof PersistedSubagentSpecSchema>;
 

@@ -1353,14 +1353,42 @@
           "minLength": 1,
           "maxLength": 200,
           "pattern": "^\\S(?:[\\s\\S]*\\S)?$",
-          "description": "OpenRouter model id for the orchestrator and subagents with the Pi harness."
+          "description": "OpenRouter model id for subagents with the Pi harness."
+        },
+        "orchestratorModel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^\\S(?:[\\s\\S]*\\S)?$",
+          "description": "OpenRouter model id for the orchestrator with the Pi harness."
+        },
+        "deepModel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^\\S(?:[\\s\\S]*\\S)?$",
+          "description": "OpenRouter model id for subagents on tasks the orchestrator marks hard, with the Pi harness."
         },
         "cursorModel": {
           "type": "string",
           "minLength": 1,
           "maxLength": 200,
           "pattern": "^\\S(?:[\\s\\S]*\\S)?$",
-          "description": "Model for the orchestrator and subagents with the Cursor harness (`claude-opus-5-5`, `composer-2.5`). The CLI's agent mode runs one preset per model; a variant id from `agent models` (`claude-opus-5-5-high-fast`) runs as its model's preset."
+          "description": "Model for subagents with the Cursor harness (`claude-sonnet-5-5`, `composer-2.5`). The CLI's agent mode runs one preset per model; a variant id from `agent models` (`claude-opus-5-5-high-fast`) runs as its model's preset."
+        },
+        "cursorOrchestratorModel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^\\S(?:[\\s\\S]*\\S)?$",
+          "description": "Model for the orchestrator with the Cursor harness (same ids as `cursorModel`)."
+        },
+        "cursorDeepModel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^\\S(?:[\\s\\S]*\\S)?$",
+          "description": "Model for subagents on tasks the orchestrator marks hard, with the Cursor harness (same ids as `cursorModel`)."
         },
         "judgeModel": {
           "type": "string",
@@ -1382,7 +1410,11 @@
         "approvalPolicy",
         "harness",
         "model",
+        "orchestratorModel",
+        "deepModel",
         "cursorModel",
+        "cursorOrchestratorModel",
+        "cursorDeepModel",
         "judgeModel",
         "watch"
       ],
@@ -1572,7 +1604,27 @@
               "minLength": 1,
               "maxLength": 200
             },
+            "orchestratorModel": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "deepModel": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
             "cursorModel": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "cursorOrchestratorModel": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "cursorDeepModel": {
               "type": "string",
               "minLength": 1,
               "maxLength": 200

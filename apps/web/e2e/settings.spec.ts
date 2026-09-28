@@ -33,12 +33,16 @@ test.describe("agent settings", () => {
     const cursorModel = page.getByTestId("setting-cursor-model");
     await expect(pi).toBeChecked();
     await expect(openRouterModel).toHaveValue("vendor/model-e2e");
+    // Role models nobody set follow the subagent model.
+    await expect(page.getByTestId("setting-orchestrator-model")).toHaveValue("vendor/model-e2e");
     await expect(cursorModel).toHaveCount(0);
 
     await page.getByTestId("setting-harness-cursor").click();
     await expect(cursor).toBeChecked();
     await expect(openRouterModel).toHaveCount(0);
-    await expect(cursorModel).toHaveValue("claude-opus-5-5");
+    await expect(cursorModel).toHaveValue("claude-sonnet-5-5");
+    await expect(page.getByTestId("setting-cursor-deep-model")).toHaveValue("claude-opus-5-5");
+    await retype(page, "setting-cursor-deep-model", "claude-opus-5-5-high");
     await retype(page, "setting-cursor-model", "  gpt-5.5[reasoning=high] ");
     await expect(cursorModel).toHaveValue("gpt-5.5[reasoning=high]");
 
@@ -55,6 +59,10 @@ test.describe("agent settings", () => {
     await openAgentSettings(page);
     await expect(cursor).toBeChecked();
     await expect(cursorModel).toHaveValue("gpt-5.5[reasoning=high]");
+    await expect(page.getByTestId("setting-cursor-orchestrator-model")).toHaveValue(
+      "gpt-5.5[reasoning=high]",
+    );
+    await expect(page.getByTestId("setting-cursor-deep-model")).toHaveValue("claude-opus-5-5-high");
 
     // The choice is a radio group: arrow keys move it.
     await page.getByTestId("setting-harness-cursor").click();

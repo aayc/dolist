@@ -125,12 +125,20 @@ public struct AgentSettings: Codable, Hashable, Sendable {
   /// `agentModel` falls back to. Patches only carry fields the user changes, so it is never
   /// written back unless the user picks a harness.
   public var harness: AgentHarnessKind
-  /// OpenRouter model id for the orchestrator and subagents with the Pi harness.
+  /// OpenRouter model id for subagents with the Pi harness.
   public var model: String
-  /// Model for the orchestrator and subagents with the Cursor harness (`claude-opus-5-5`,
-  /// `composer-2.5`). The CLI's agent mode runs one preset per model; a variant id from
-  /// `agent models` (`claude-opus-5-5-high-fast`) runs as its model's preset.
+  /// OpenRouter model id for the orchestrator with the Pi harness.
+  public var orchestratorModel: String
+  /// OpenRouter model id for subagents on tasks the orchestrator marks hard, with the Pi harness.
+  public var deepModel: String
+  /// Model for subagents with the Cursor harness (`claude-sonnet-5-5`, `composer-2.5`). The CLI's
+  /// agent mode runs one preset per model; a variant id from `agent models`
+  /// (`claude-opus-5-5-high-fast`) runs as its model's preset.
   public var cursorModel: String
+  /// Model for the orchestrator with the Cursor harness.
+  public var cursorOrchestratorModel: String
+  /// Model for subagents on tasks the orchestrator marks hard, with the Cursor harness.
+  public var cursorDeepModel: String
   /// OpenRouter model id for the safety judge (with either harness).
   public var judgeModel: String
   public var watch: AgentWatchWindow
@@ -145,16 +153,21 @@ public struct AgentSettings: Codable, Hashable, Sendable {
 
   public init(
     enabled: Bool, settleMs: Int, maxConcurrentSubagents: Int, harness: AgentHarnessKind = .pi,
-    model: String, cursorModel: String = AgentSettings.defaultCursorModel, judgeModel: String,
-    watch: AgentWatchWindow, actOnExistingTasks: Bool, approvalTimeoutMs: Int,
-    approvalPolicy: ApprovalPolicy = .default
+    model: String, orchestratorModel: String? = nil, deepModel: String? = nil,
+    cursorModel: String = AgentSettings.defaultCursorModel, cursorOrchestratorModel: String? = nil,
+    cursorDeepModel: String? = nil, judgeModel: String, watch: AgentWatchWindow,
+    actOnExistingTasks: Bool, approvalTimeoutMs: Int, approvalPolicy: ApprovalPolicy = .default
   ) {
     self.enabled = enabled
     self.settleMs = settleMs
     self.maxConcurrentSubagents = maxConcurrentSubagents
     self.harness = harness
     self.model = model
+    self.orchestratorModel = orchestratorModel ?? model
+    self.deepModel = deepModel ?? model
     self.cursorModel = cursorModel
+    self.cursorOrchestratorModel = cursorOrchestratorModel ?? cursorModel
+    self.cursorDeepModel = cursorDeepModel ?? cursorModel
     self.judgeModel = judgeModel
     self.watch = watch
     self.actOnExistingTasks = actOnExistingTasks
@@ -162,8 +175,9 @@ public struct AgentSettings: Codable, Hashable, Sendable {
     self.approvalPolicy = approvalPolicy
   }
 
-  /// Daemons older than the harness setting send neither `harness` nor `cursorModel`, and older
-  /// than the approval policy no `approvalPolicy`.
+  /// Daemons older than the harness setting send neither `harness` nor `cursorModel`, older than
+  /// the approval policy no `approvalPolicy`, and older than role models none: their orchestrator
+  /// and hard tasks ran on the subagent model.
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     enabled = try container.decode(Bool.self, forKey: .enabled)
@@ -173,8 +187,15 @@ public struct AgentSettings: Codable, Hashable, Sendable {
       try container.decodeIfPresent(String.self, forKey: .harness)
       .flatMap(AgentHarnessKind.init(rawValue:)) ?? .pi
     model = try container.decode(String.self, forKey: .model)
+    orchestratorModel =
+      try container.decodeIfPresent(String.self, forKey: .orchestratorModel) ?? model
+    deepModel = try container.decodeIfPresent(String.self, forKey: .deepModel) ?? model
     cursorModel =
       try container.decodeIfPresent(String.self, forKey: .cursorModel) ?? Self.defaultCursorModel
+    cursorOrchestratorModel =
+      try container.decodeIfPresent(String.self, forKey: .cursorOrchestratorModel) ?? cursorModel
+    cursorDeepModel =
+      try container.decodeIfPresent(String.self, forKey: .cursorDeepModel) ?? cursorModel
     judgeModel = try container.decode(String.self, forKey: .judgeModel)
     watch = try container.decode(AgentWatchWindow.self, forKey: .watch)
     actOnExistingTasks = try container.decode(Bool.self, forKey: .actOnExistingTasks)
@@ -185,14 +206,16 @@ public struct AgentSettings: Codable, Hashable, Sendable {
   }
 
   public static let defaultModel = "deepseek/deepseek-v4.1-flash"
-  public static let defaultCursorModel = "claude-opus-5-5"
+  public static let defaultCursorModel = "claude-sonnet-5-5"
+  public static let defaultCursorDeepModel = "claude-opus-5-5"
 
   /// The model id the configured harness runs its conversations on (`agentModel` in `@ddl/core`).
   public var agentModel: String { harness == .cursor ? cursorModel : model }
 
   public static let defaults = AgentSettings(
     enabled: true, settleMs: 2500, maxConcurrentSubagents: 3, harness: .pi, model: defaultModel,
-    cursorModel: defaultCursorModel, judgeModel: defaultModel,
+    cursorModel: defaultCursorModel, cursorDeepModel: defaultCursorDeepModel,
+    judgeModel: defaultModel,
     watch: AgentWatchWindow(pastDays: 0, futureDays: 7), actOnExistingTasks: true,
     approvalTimeoutMs: 12 * 60 * 60 * 1000, approvalPolicy: .default)
 }
@@ -403,7 +426,11 @@ public struct SettingsPatch: Codable, Hashable, Sendable {
     public var maxConcurrentSubagents: Int?
     public var harness: AgentHarnessKind?
     public var model: String?
+    public var orchestratorModel: String?
+    public var deepModel: String?
     public var cursorModel: String?
+    public var cursorOrchestratorModel: String?
+    public var cursorDeepModel: String?
     public var judgeModel: String?
     public var watch: WatchPatch?
     public var actOnExistingTasks: Bool?
@@ -412,16 +439,22 @@ public struct SettingsPatch: Codable, Hashable, Sendable {
 
     public init(
       enabled: Bool? = nil, settleMs: Int? = nil, maxConcurrentSubagents: Int? = nil,
-      harness: AgentHarnessKind? = nil, model: String? = nil, cursorModel: String? = nil,
-      judgeModel: String? = nil, watch: WatchPatch? = nil, actOnExistingTasks: Bool? = nil,
-      approvalTimeoutMs: Int? = nil, approvalPolicy: ApprovalPolicy? = nil
+      harness: AgentHarnessKind? = nil, model: String? = nil, orchestratorModel: String? = nil,
+      deepModel: String? = nil, cursorModel: String? = nil, cursorOrchestratorModel: String? = nil,
+      cursorDeepModel: String? = nil, judgeModel: String? = nil, watch: WatchPatch? = nil,
+      actOnExistingTasks: Bool? = nil, approvalTimeoutMs: Int? = nil,
+      approvalPolicy: ApprovalPolicy? = nil
     ) {
       self.enabled = enabled
       self.settleMs = settleMs
       self.maxConcurrentSubagents = maxConcurrentSubagents
       self.harness = harness
       self.model = model
+      self.orchestratorModel = orchestratorModel
+      self.deepModel = deepModel
       self.cursorModel = cursorModel
+      self.cursorOrchestratorModel = cursorOrchestratorModel
+      self.cursorDeepModel = cursorDeepModel
       self.judgeModel = judgeModel
       self.watch = watch
       self.actOnExistingTasks = actOnExistingTasks
@@ -471,7 +504,11 @@ extension AppSettings {
       if let v = p.maxConcurrentSubagents { next.agent.maxConcurrentSubagents = v }
       if let v = p.harness { next.agent.harness = v }
       if let v = p.model { next.agent.model = v }
+      if let v = p.orchestratorModel { next.agent.orchestratorModel = v }
+      if let v = p.deepModel { next.agent.deepModel = v }
       if let v = p.cursorModel { next.agent.cursorModel = v }
+      if let v = p.cursorOrchestratorModel { next.agent.cursorOrchestratorModel = v }
+      if let v = p.cursorDeepModel { next.agent.cursorDeepModel = v }
       if let v = p.judgeModel { next.agent.judgeModel = v }
       if let w = p.watch {
         if let v = w.pastDays { next.agent.watch.pastDays = v }

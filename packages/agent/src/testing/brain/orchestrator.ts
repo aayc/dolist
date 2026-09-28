@@ -530,9 +530,13 @@ function spawnCall(work: Work, capabilities: Capability[]): TurnToolCall {
       goal,
       instructions: instructions.join(" ").slice(0, 7_900),
       capabilities,
+      ...(HARD_TASK.test(work.text) ? { deep: true } : {}),
     },
   };
 }
+
+/** Tasks the prompt calls hard (`deep`): in-depth research, a lot of it. */
+const HARD_TASK = /\b(?:in[- ]?depth|deep dive|thorough(?:ly)?|a (?:ton|bunch|lot) of research)\b/i;
 
 /** Variations are keyed on the task's content (not its random id) so a seed reproduces across runs. */
 function acknowledgment(task: ParsedChangedTask, seed: number): string {

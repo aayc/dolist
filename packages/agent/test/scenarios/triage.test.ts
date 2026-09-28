@@ -15,6 +15,42 @@ import {
 
 useFakeRuntimes();
 
+describe("triage: models", () => {
+  it("runs the orchestrator, subagents and hard tasks on their own models", async () => {
+    const t = await fakeRuntime({
+      settings: {
+        agent: {
+          harness: "pi",
+          model: "fake/worker",
+          orchestratorModel: "fake/orchestrator",
+          deepModel: "fake/deep",
+        },
+      },
+    });
+    const plain = "Research best standing desks under $500";
+    const hard = "Do some in-depth research on ergonomic chairs";
+    await t.writeDailyNote([`- [ ] ${plain}`, `- [ ] ${hard}`]);
+    await t.waitForStatus(plain, "done");
+    await t.waitForStatus(hard, "done");
+    const modelsOf = (role: string, task?: string) =>
+      new Set(
+        t.brain.decisions
+          .filter((d) => d.role === role)
+          .filter((d) => !task || d.request.messages.some((m) => m.content.includes(task)))
+          .map((d) => d.request.model),
+      );
+    expect(modelsOf("orchestrator")).toEqual(new Set(["fake/orchestrator"]));
+    expect(modelsOf("subagent", plain)).toEqual(new Set(["fake/worker"]));
+    expect(modelsOf("subagent", hard)).toEqual(new Set(["fake/deep"]));
+    const spawns = t.audit.gate.filter((g) => g.toolName === "spawn_subagent");
+    const hardId = t.record(hard)?.taskId;
+    expect(spawns.map((g) => g.input)).toEqual([
+      expect.not.objectContaining({ deep: true }),
+      expect.objectContaining({ taskId: hardId, deep: true }),
+    ]);
+  });
+});
+
 describe("triage: delegate", () => {
   it("delegates research and finishes with a markdown artifact", async () => {
     const t = await fakeRuntime();

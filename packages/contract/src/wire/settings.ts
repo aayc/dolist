@@ -118,11 +118,21 @@ export const AgentSettingsSchema = named(
     ...agentScalarFields,
     approvalPolicy: ApprovalPolicySchema,
     harness: AgentHarnessKindSchema,
-    model: ModelIdSchema.describe(
-      "OpenRouter model id for the orchestrator and subagents with the Pi harness.",
+    model: ModelIdSchema.describe("OpenRouter model id for subagents with the Pi harness."),
+    orchestratorModel: ModelIdSchema.describe(
+      "OpenRouter model id for the orchestrator with the Pi harness.",
+    ),
+    deepModel: ModelIdSchema.describe(
+      "OpenRouter model id for subagents on tasks the orchestrator marks hard, with the Pi harness.",
     ),
     cursorModel: ModelIdSchema.describe(
-      "Model for the orchestrator and subagents with the Cursor harness (`claude-opus-5-5`, `composer-2.5`). The CLI's agent mode runs one preset per model; a variant id from `agent models` (`claude-opus-5-5-high-fast`) runs as its model's preset.",
+      "Model for subagents with the Cursor harness (`claude-sonnet-5-5`, `composer-2.5`). The CLI's agent mode runs one preset per model; a variant id from `agent models` (`claude-opus-5-5-high-fast`) runs as its model's preset.",
+    ),
+    cursorOrchestratorModel: ModelIdSchema.describe(
+      "Model for the orchestrator with the Cursor harness (same ids as `cursorModel`).",
+    ),
+    cursorDeepModel: ModelIdSchema.describe(
+      "Model for subagents on tasks the orchestrator marks hard, with the Cursor harness (same ids as `cursorModel`).",
     ),
     judgeModel: ModelIdSchema.describe(
       "OpenRouter model id for the safety judge (whichever harness runs the agent).",
@@ -191,7 +201,11 @@ export const SettingsPatchSectionSchemas = {
       approvalPolicy: ApprovalPolicySchema,
       harness: AgentHarnessKindSchema,
       model: ModelIdInputSchema,
+      orchestratorModel: ModelIdInputSchema,
+      deepModel: ModelIdInputSchema,
       cursorModel: ModelIdInputSchema,
+      cursorOrchestratorModel: ModelIdInputSchema,
+      cursorDeepModel: ModelIdInputSchema,
       judgeModel: ModelIdInputSchema,
       watch: z.strictObject(watchFields).partial(),
     })

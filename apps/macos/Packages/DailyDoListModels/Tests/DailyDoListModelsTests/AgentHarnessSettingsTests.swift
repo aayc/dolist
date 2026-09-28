@@ -3,7 +3,7 @@ import Testing
 
 @testable import DailyDoListModels
 
-/// The agent harness setting (`agent.harness`, `agent.cursorModel`): what older and newer daemons
+/// The agent harness settings (`agent.harness`, its models): what older and newer daemons
 /// may send, and the patches that change it.
 struct AgentHarnessSettingsTests {
   /// The daemon's default agent settings as JSON, with `changes` applied (`nil` drops a key).
@@ -21,10 +21,22 @@ struct AgentHarnessSettingsTests {
       AgentSettings.self, from: JSONEncoder.daemon.encode(agentJSON(changes)))
   }
 
-  @Test func defaultsToPiWithTheDefaultCursorModel() {
-    #expect(AgentSettings.defaults.harness == .pi)
-    #expect(AgentSettings.defaults.cursorModel == "claude-opus-5-5")
-    #expect(AgentSettings.defaults.agentModel == AgentSettings.defaultModel)
+  @Test func defaultsToPiWithTheDefaultCursorModels() {
+    let agent = AgentSettings.defaults
+    #expect(agent.harness == .pi)
+    #expect(agent.cursorModel == "claude-sonnet-5-5")
+    #expect(agent.cursorOrchestratorModel == "claude-sonnet-5-5")
+    #expect(agent.cursorDeepModel == "claude-opus-5-5")
+    #expect(agent.agentModel == AgentSettings.defaultModel)
+  }
+
+  @Test func aDaemonOlderThanRoleModelsRanEveryRoleOnTheSubagentModel() throws {
+    let agent = try Self.decodeAgent([
+      "orchestratorModel": nil, "deepModel": nil, "cursorOrchestratorModel": nil,
+      "cursorDeepModel": nil, "model": "vendor/model-a", "cursorModel": "gpt-5.5",
+    ])
+    #expect(agent.orchestratorModel == "vendor/model-a" && agent.deepModel == "vendor/model-a")
+    #expect(agent.cursorOrchestratorModel == "gpt-5.5" && agent.cursorDeepModel == "gpt-5.5")
   }
 
   @Test func settingsFromADaemonOlderThanTheHarnessSettingDecodeAsPi() throws {

@@ -20,7 +20,7 @@ storage.watch ─▶ TaskWatcher ─▶ Orchestrator ──spawn_subagent──�
 
 | Mode | Harness | Safety | Network |
 | --- | --- | --- | --- |
-| `live` | `settings.agent.harness`: `pi` — the Pi coding-agent SDK on OpenRouter (`deepseek/deepseek-v4.1-flash` by default) — or `cursor` — the Cursor CLI's agent (Claude Opus 5.5, `claude-opus-5-5`, by default, see below) | rules + LLM judge | yes |
+| `live` | `settings.agent.harness`: `pi` — the Pi coding-agent SDK on OpenRouter (`deepseek/deepseek-v4.1-flash` by default) — or `cursor` — the Cursor CLI's agent (Claude Sonnet 5.5 by default, Opus 5.5 for hard tasks, see below) | rules + LLM judge | yes |
 | `mock` | `ScriptedHarness` with a deterministic script | rules only | no |
 | `off` | — (no watcher) | — | no |
 
@@ -402,8 +402,10 @@ bar ("Runs everything" in the warning color), and "Run everything" asks for conf
 
 `@ddl/agent/cursor` (`src/harness/cursor/`) runs conversations on the Cursor CLI's agent
 (`agent acp`, the Agent Client Protocol: JSON-RPC over stdio), signed in with your own Cursor
-account — no API key. One CLI process per session; the model is `agent.cursorModel`, matched
-against the CLI's model list by id, base id (`gpt-5.5` for `gpt-5.5[…]`) or display name.
+account — no API key. One CLI process per session; its model is the role's (`agent.cursorModel` for
+subagents, `cursorOrchestratorModel` for the orchestrator, `cursorDeepModel` when `spawn_subagent`
+marks the task `deep`), matched against the CLI's model list by id, base id (`gpt-5.5` for
+`gpt-5.5[…]`) or display name.
 
 **Tools.** The CLI runs its own tools (read, grep/glob, shell, edit, delete, web fetch, subagents)
 without asking the client, so none of them is used. Every tool the agent has is ours, served over
