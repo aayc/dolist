@@ -40,13 +40,15 @@ struct PhoneProfileSelectionTests {
     var constructions: [UUID] = []
     let model = PhoneAppModel(
       rootDirectory: root, defaults: defaults,
+      credentials: KeychainConnectionCredentials(service: "app.dailydolist.iphone.tests.\(UUID())"),
       workspaceFactory: { profile in
         constructions.append(profile.id)
         if profile.id == unavailable.id { throw WorkspaceRepositoryError.corruptIndex }
         return workspace
       }, installIntegrations: false)
-    // No socket, Keychain read, notification center or production UserDefaults is used.
+    // No socket, production Keychain item, notification center or production UserDefaults is used.
     await model.connection.setActive(false)
+    try await model.prepareStorage()
     await model.select(original)
     #expect(model.workspace === workspace)
     let session = try #require(workspace.active)

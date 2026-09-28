@@ -131,7 +131,7 @@ private struct DestructiveCheckpointFixture {
   func remove() { try? FileManager.default.removeItem(at: root) }
 }
 
-private final class RejectingCheckpoints: NoteCheckpointStore, @unchecked Sendable {
+final class RejectingCheckpoints: NoteCheckpointStore, @unchecked Sendable {
   private let wrapped: MarkdownCheckpointStore
   private let lock = NSLock()
   private var rejecting = false
