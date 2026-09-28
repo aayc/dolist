@@ -78,7 +78,7 @@ public final class AgentStore {
   public internal(set) var frames: [SurfaceKey: SurfaceFrame] = [:]
   /// Recent actions of each live surface (newest last), for overlays and the action log.
   public internal(set) var surfaceActions: [SurfaceKey: [SurfaceAction]] = [:]
-  /// Today's daily note, used by `refresh()` to fetch its threads and records. Nil = every thread.
+  /// Today's daily note, whose records `refresh()` fetches.
   public var todayNotePath: String?
   /// Starter routines for "New Routine…" (from `GET /api/routines`).
   public internal(set) var routineTemplates: [RoutineTemplate] = []

@@ -6,15 +6,10 @@ import Foundation
 // the ids those events touched (`preserving`) and the snapshot never overwrites or drops them.
 
 extension AgentState {
-  /// Applies a thread list. `notePath` is the list's filter: summaries of other notes are kept
-  /// (nil = the list is every thread, so it replaces all summaries).
-  mutating func applyThreadList(
-    _ list: [ThreadSummary], notePath: String?, preserving: Set<String> = []
-  ) -> Changes {
+  /// Applies the list of every thread: it replaces all summaries.
+  mutating func applyThreadList(_ list: [ThreadSummary], preserving: Set<String> = []) -> Changes {
     let before = threads
-    var next = threads.filter { id, summary in
-      (notePath != nil && summary.notePath != notePath) || preserving.contains(id)
-    }
+    var next = threads.filter { id, _ in preserving.contains(id) }
     for summary in list {
       if preserving.contains(summary.id), let local = next[summary.id],
         local.updatedAt > summary.updatedAt

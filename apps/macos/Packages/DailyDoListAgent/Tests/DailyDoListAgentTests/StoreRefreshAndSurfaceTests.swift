@@ -56,7 +56,7 @@ struct StoreRefreshTests {
 
     #expect(store.status?.running == 0)
     #expect(store.pendingApprovals.map(\.id) == ["apr_new"])
-    // The orchestrator's chat is loaded too (it's pinned in the inbox whatever the filter).
+    // The orchestrator's chat is loaded too (it's pinned in the inbox).
     #expect(store.threads.keys.sorted() == ["thr_1", "thr_2", OrchestratorThread.id])
     #expect(store.records(for: Fixture.note).map(\.taskId) == ["tsk_1"])
     #expect(store.thread("thr_1")?.messages.map(\.id) == ["m", "m2"])
@@ -67,20 +67,32 @@ struct StoreRefreshTests {
     #expect(store.lastError == nil)
   }
 
-  @Test func refreshFetchesTodaysThreadsAndKeepsOtherNotes() async {
-    store.apply(.threadUpsert(Fixture.summary("thr_other", notePath: Fixture.otherNote)))
-    store.apply(.threadUpsert(Fixture.summary("thr_stale_today")))
+  @Test func refreshListsEveryThreadSoOlderOnesThatNeedYouStayInTheInbox() async {
+    let day: EpochMillis = 86_400_000
+    store.apply(.threadUpsert(Fixture.summary("thr_stale")))
     client.script {
       $0.agentStatus = { Fixture.status() }
-      $0.threads = { notePath, _ in notePath == Fixture.note ? [Fixture.summary("thr_today")] : [] }
+      $0.threads = { notePath, _ in
+        guard notePath == nil else { return [] }
+        return [
+          Fixture.summary("thr_today", status: .done, createdAt: 10 * day, updatedAt: 10 * day),
+          Fixture.summary(
+            "thr_waiting", notePath: Fixture.otherNote, status: .waitingUser, updatedAt: 8 * day),
+          Fixture.summary(
+            "thr_old", notePath: Fixture.otherNote, status: .done, updatedAt: 8 * day),
+        ]
+      }
       $0.taskRecords = { note in [Fixture.record(notePath: note)] }
     }
     await store.refresh(todayNotePath: Fixture.note)
     #expect(store.todayNotePath == Fixture.note)
-    #expect(store.threads.keys.sorted() == ["thr_other", "thr_today"])
-    #expect(client.calls.contains("threads:\(Fixture.note)"))
+    #expect(store.threads.keys.sorted() == ["thr_old", "thr_today", "thr_waiting"])
+    #expect(client.calls.contains("threads:*"))
     #expect(client.calls.contains("taskRecords:\(Fixture.note)"))
     #expect(store.records(for: Fixture.note).count == 1)
+    let inbox = store.inboxSections(now: Date(epochMillis: 10 * day + 1_000))
+    #expect(inbox.map(\.group) == [.needsYou, .done])
+    #expect(inbox.map { $0.threads.map(\.id) } == [["thr_waiting"], ["thr_today"]])
   }
 
   @Test func eventsDuringARefreshAreNotOverwritten() async {

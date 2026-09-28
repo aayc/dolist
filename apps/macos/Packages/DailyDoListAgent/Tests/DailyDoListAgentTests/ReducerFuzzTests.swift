@@ -154,7 +154,7 @@ struct ReducerFuzzTests {
       case 17:
         var list: [ThreadSummary] = []
         for id in ReducerFuzzTests.threadIds where bool() { list.append(summary(id)) }
-        _ = state.applyThreadList(list, notePath: bool() ? nil : pick(ReducerFuzzTests.notes))
+        _ = state.applyThreadList(list)
       case 18:
         var list: [ApprovalRequest] = []
         for _ in 0..<Int.random(in: 0...3, using: &rng) { list.append(approval()) }
@@ -291,7 +291,7 @@ struct ReducerFuzzTests {
     }
     let (note, records) = generator.snapshot()
 
-    _ = state.applyThreadList(summaries, notePath: nil)
+    _ = state.applyThreadList(summaries)
     _ = state.applyPendingApprovals(pending)
     _ = state.applyRecordsSnapshot(notePath: note, records: records)
     for thread in loaded {

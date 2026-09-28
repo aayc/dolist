@@ -62,7 +62,7 @@ struct OrchestratorChatTests {
       ])
   }
 
-  @Test func refreshLoadsItQuietlyEvenWithTodaysFilter() async {
+  @Test func refreshLoadsIt() async {
     client.script {
       $0.agentStatus = { Fixture.status(running: 0) }
       $0.thread = { id in
@@ -73,7 +73,6 @@ struct OrchestratorChatTests {
       }
     }
     await store.refresh(todayNotePath: Fixture.note)
-    #expect(client.calls.contains("threads:\(Fixture.note)"))
     #expect(store.orchestratorThread?.messages.map(\.id) == ["m1"])
     #expect(store.orchestratorSummary?.title == "Orchestrator")
   }

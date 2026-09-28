@@ -95,23 +95,14 @@ struct ReducerApprovalTests {
 
 @Suite("Reducer: REST snapshots")
 struct ReducerSnapshotTests {
-  @Test func anUnfilteredThreadListReplacesEverySummary() {
+  @Test func theThreadListReplacesEverySummary() {
     var state = AgentState()
     _ = state.upsertSummary(Fixture.summary("thr_gone"))
     _ = state.upsertSummary(Fixture.summary("thr_1", status: .working))
     #expect(
-      state.applyThreadList([Fixture.summary("thr_1", status: .done, updatedAt: 5)], notePath: nil)
-        == .threads)
+      state.applyThreadList([Fixture.summary("thr_1", status: .done, updatedAt: 5)]) == .threads)
     #expect(state.threads.keys.sorted() == ["thr_1"])
     #expect(state.threads["thr_1"]?.status == .done)
-  }
-
-  @Test func aFilteredListOnlyReplacesThatNotesSummaries() {
-    var state = AgentState()
-    _ = state.upsertSummary(Fixture.summary("thr_old_today"))
-    _ = state.upsertSummary(Fixture.summary("thr_other", notePath: Fixture.otherNote))
-    _ = state.applyThreadList([Fixture.summary("thr_new")], notePath: Fixture.note)
-    #expect(state.threads.keys.sorted() == ["thr_new", "thr_other"])
   }
 
   @Test func theListKeepsSummariesThatEventsChangedWhileItWasInFlight() {
@@ -119,7 +110,7 @@ struct ReducerSnapshotTests {
     _ = state.upsertSummary(Fixture.summary("thr_created", updatedAt: 50))
     _ = state.upsertSummary(Fixture.summary("thr_1", status: .done, updatedAt: 40))
     _ = state.applyThreadList(
-      [Fixture.summary("thr_1", status: .working, updatedAt: 30)], notePath: nil,
+      [Fixture.summary("thr_1", status: .working, updatedAt: 30)],
       preserving: ["thr_created", "thr_1"])
     #expect(state.threads["thr_created"] != nil)
     #expect(state.threads["thr_1"]?.status == .done)
@@ -127,8 +118,7 @@ struct ReducerSnapshotTests {
 
   @Test func theListUpdatesLoadedThreadHeaders() {
     var state = Fixture.loaded(Fixture.thread(status: .working, updatedAt: 1))
-    let changes = state.applyThreadList(
-      [Fixture.summary(status: .done, updatedAt: 9)], notePath: nil)
+    let changes = state.applyThreadList([Fixture.summary(status: .done, updatedAt: 9)])
     #expect(changes.contains(.loadedThreads))
     #expect(state.loadedThreads["thr_1"]?.status == .done)
   }

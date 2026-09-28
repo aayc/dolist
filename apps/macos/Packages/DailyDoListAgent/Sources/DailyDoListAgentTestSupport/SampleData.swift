@@ -151,7 +151,7 @@ extension AgentStore {
       for (notePath, records) in byNote {
         changes.formUnion(state.applyRecordsSnapshot(notePath: notePath, records: records))
       }
-      changes.formUnion(state.applyThreadList(snapshot.threads, notePath: nil))
+      changes.formUnion(state.applyThreadList(snapshot.threads))
       for thread in snapshot.loadedThreads {
         if let response = snapshot.threadResponse(thread.id) {
           changes.formUnion(state.applyThreadResponse(response))

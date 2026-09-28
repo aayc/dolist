@@ -3,9 +3,9 @@ import DailyDoListModels
 import Foundation
 
 extension AgentStore {
-  /// Refetches everything events would have kept current: the status, pending approvals, the
-  /// thread list (`todayNotePath`'s threads, or every thread when it's nil), the records of every
-  /// note loaded with `loadRecords(for:)` (and today's), the routines and the runs of those loaded
+  /// Refetches everything events would have kept current: the status, pending approvals, every
+  /// thread (the inbox keeps older ones that still need the user), the records of every note
+  /// loaded with `loadRecords(for:)` (and today's), the routines and the runs of those loaded
   /// with `loadRuns(ofRoutine:)`, every loaded thread, and the orchestrator's chat. (Surface
   /// subscriptions survive reconnects: the client re-sends them.)
   ///
@@ -19,12 +19,11 @@ extension AgentStore {
     let mark = eventSeq
 
     let client = self.client
-    let listFilter = self.todayNotePath
     let notes = trackedNotes.sorted()
     let routineIds = trackedRoutines.sorted()
     async let status = Self.capture { try await client.agentStatus() }
     async let pending = Self.capture { try await client.approvals(status: .pending) }
-    async let list = Self.capture { try await client.threads(notePath: listFilter, taskId: nil) }
+    async let list = Self.capture { try await client.threads(notePath: nil, taskId: nil) }
     async let records = Self.fetchRecords(client: client, notes: notes)
     async let routineList = Self.capture { try await client.routines() }
     async let runs = Self.fetchRuns(client: client, routineIds: routineIds)
@@ -48,7 +47,7 @@ extension AgentStore {
     switch listResult {
     case .success(let value):
       let preserving = touchedIds(threadTouches, since: mark)
-      mutate { $0.applyThreadList(value, notePath: listFilter, preserving: preserving) }
+      mutate { $0.applyThreadList(value, preserving: preserving) }
     case .failure(let error): failure = failure ?? error
     }
     for (notePath, result) in recordResults {
@@ -69,8 +68,8 @@ extension AgentStore {
     }
     if let failure { report(failure, title: "Couldn't refresh the agent's state") }
 
-    // The orchestrator's chat is pinned in the inbox whatever the list's filter, so it's always
-    // loaded; a daemon without an agent runtime has none, which isn't worth a toast.
+    // The orchestrator's chat is pinned in the inbox, so it's always loaded; a daemon without an
+    // agent runtime has none, which isn't worth a toast.
     let loaded = Set(state.loadedThreads.keys).union([OrchestratorThread.id]).sorted()
     await withTaskGroup(of: Void.self) { group in
       for id in loaded {
