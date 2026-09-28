@@ -106,6 +106,17 @@ is still granted. Never kill Daily Do List processes by name; never bind or kill
 
 ## In flight
 
+- **iPhone transfer requested (2026-09-27):** the user asked for a full progress/problem/next-step
+  document to hand implementation to another agent. Feature work in the previous task has stopped,
+  all three subagents have preserved their work and stopped, and its hourly continuation is paused.
+  Start with [the transfer document](https://github.com/aayc/dolist/blob/a16fbcd/apps/mobile/TRANSFER.md)
+  on `codex/iphone-app` (documentation checkpoint `a16fbcd`, integrated code `79e928f`).
+  It records verified behavior, exact outstanding defects, remaining CUA, toolchain/CI evidence and
+  integration instructions. Unintegrated pushed work: protection `22d1f60`, bounded search
+  `586e150` (never its snapshot parent), uncompiled/untested drawing-import WIP `c2d5e19`. Recovery
+  staging cleanup and hardware Tab/Shift-Tab remain unwritten. Do not mark the app complete.
+  CI, Security and Linux passed on `79e928f`; the native workflow was still running at handoff.
+
 - Full native iPhone app: `codex/iphone-app`, checkpoint `79e928f` pushed, with current main
   host-continuity fixes merged. Native pairing/Keychain, identity guard, durable notes/composers/
   captures, Inbox/agent UI and shared native drawing engine are integrated. Real simulator CUA
