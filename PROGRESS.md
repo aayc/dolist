@@ -4,12 +4,12 @@ The running handoff log: what shipped, what's in flight, what's next, and the de
 them, so work can continue on any machine at any point. Read it before starting; keep it current
 (the rules are in `AGENTS.md`, "Handoff log").
 
-**Last updated:** 2026-09-27 (evening: iPhone streams integrated, CI faster) · The existing Linux VM runs the remote Cursor agent on `09e13dc`,
+**Last updated:** 2026-09-28 (UX review: three bug fixes shipped and installed) · The existing Linux VM runs the remote Cursor agent on `09e13dc`,
 paired with the other development Mac, whose bundled daemon is now `67a488b` (quit-sync fix
 integrated on `main` as `cf1807c`). Real remote-task, approval, artifact, reboot, bidirectional
 handover and app-close/reopen checks passed.
-The main development Mac's installation is `eed5999e` (reinstalled 2026-09-28; permissions and
-app control survived, agent live).
+The main development Mac's installation is `083005dd` (reinstalled 2026-09-28 with the three UX
+bug fixes below; permissions and app control survived, agent live, CI and macOS green).
 The full native iPhone implementation plan is also on `main` (`40e1b29`); the user has now
 authorized implementation and thorough simulator testing in its separate task.
 
@@ -172,6 +172,13 @@ Native iPhone implementation is authorized and continues separately, including s
 
 ## Shipped on `main` (newest first; older history is `git log`)
 
+- `4855027a`…`083005dd` Three bugs from a UX review of real use (2026-09-28). The agent's own lines
+  under a task no longer count as its notes, so writing its result no longer wakes the subagent
+  with "The user edited the task" (14 "Nothing to change" replies across 6 threads); older tracker
+  state drops them on load. A subagent's result is posted once: `finish_task`'s summary replaces
+  the text it just wrote when nothing visible came between. The Mac inbox lists every thread, so
+  older ones that need you survive a relaunch (it only fetched today's note's threads).
+
 - `5ad4fcf` CI keeps only the newest build and turbo cache of each job per branch (the repository
   was over its 10 GB cache limit), and failing Swift jobs upload crash reports. Two Vim timers no
   longer read freed objects, and the Vim keystroke p99s take the best of three rounds (on the
@@ -235,6 +242,13 @@ Native iPhone implementation is authorized and continues separately, including s
 
 ## Next up
 
+- **UX review follow-ups (2026-09-28, not started; the user picked the bug fixes first):** let the
+  user reply in the note (an indented line they write under a task goes to its agent, instead of
+  replies working only in the thread); carry unanswered questions into today's note; make finished
+  tasks look finished without editing the file (dim the line, "Check off" on the badge); give the
+  answer one home (badge = status, one line in the note, the rest in the thread); fold the
+  orchestrator chat's tool calls; move the Remote row out of the panel's header; render markdown in
+  inbox previews; show friendly dates on tabs.
 - **CI triggers** (the user, in repo settings): turn Actions (or each workflow) off and on, push
   once, check `gh run list --event push`; else GitHub Support. Until then, dispatch by hand.
 - **B0 binary files** (attachment sync, file serving) and **P rendering parity** (images on the
