@@ -9,9 +9,14 @@
   @Observable
   public final class MobileDrawingController {
     public let editor: DrawingEditor
-    public var library: MobileDrawingLibrary = .shared
+    /// The host injects its one persistent library into every controller.
+    public var library = MobileDrawingLibrary(storage: .memory())
     @ObservationIgnored public var onOpenLink: ((String) -> Void)?
     @ObservationIgnored public var elementLink: ((String) -> String?)?
+    /// The document owner's file and version at the moment an import commits.
+    @ObservationIgnored public var importContext: () -> DrawingImportContext = {
+      DrawingImportContext()
+    }
     public var isEditing = true
     public var viewOnly = false
     public var zenMode = false

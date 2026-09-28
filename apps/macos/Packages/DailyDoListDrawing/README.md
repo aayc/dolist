@@ -219,6 +219,9 @@ rejoin it); tiling it would remove that hitch.
   the mouse and keys, a bound arrow, typing text in place, labeling on double-click, Escape,
   panning and zooming, display mode) and snapshots of the editing canvas with its tool bar.
 - **Performance**: budgets above.
+- **iPhone imports and library** (`DailyDoListMobileDrawingTests`): superseded and cancelled photo
+  loads, the exact request-size boundary and legacy library migration run here without UIKit; the
+  iPhone app's test bundle also compiles this folder and adds the UIKit cases.
 
 ## Sources and licenses
 
@@ -321,10 +324,10 @@ libraries to 1,000 items. Failed imports leave the drawing/library untouched.
 
 `MobileDrawingController.onOpenLink` must be connected to the app's navigation policy;
 `elementLink` supplies a deep link for a drawing element ID. Without these callbacks, the relevant
-buttons are disabled. `library` defaults to `MobileDrawingLibrary.shared` (app preferences) and
-can be replaced with a store initialized using an isolated `UserDefaults` suite. Library access
-is explicit user interaction and never a remote request. The **Copy, library and links** action
-opens these controls. Integrated runtime checks remain pending.
+buttons are disabled. `library` defaults to a memory-only library; the host injects one
+persistent library into every controller (see [Imports and the shape library](#imports-and-the-shape-library)).
+Library access is explicit user interaction and never a remote request. The **Copy, library and
+links** action opens these controls. Integrated runtime checks remain pending.
 
 The fifth checkpoint exposes text binding, vertical alignment and automatic width; canvas
 background/clear/search/statistics/help; view/zen modes; selection/reset zoom; all built-in font IDs
@@ -383,3 +386,39 @@ flags now reach pointer actions as well as discrete keyboard commands. Inspector
 sample. Final shared regression: 126 tests before the final eraser addition; the focused final
 interaction/elbow pass covers 27 tests. The iOS target and UIKit tests compile unsigned. App-owned
 runtime checks and the remaining explicit compatibility limits above still apply.
+
+### Imports and the shape library
+
+Photo, file, paste, library and style imports commit through `DrawingEditor.validatedImport`: the
+import runs on a disposable editor, its exact resulting scene is validated, and only then is it
+published as one undo step. A refusal changes nothing: scene, files, selection, history and saves
+stay as they were. An interaction in progress (a gesture, a text edit, a line drawn click by click)
+refuses a late import rather than being ended by it; explicit synchronous commands (paste, library
+insertion, paste style) first finish the interaction, as other commands do.
+
+The validation is the document owner's `MobileDrawingController.importContext`: a
+`DrawingImportContext` holding the drawing's current file (frontmatter, other sections, text
+elements) and its conditional base version. It serializes the candidate as the next sync will and
+measures `JSONEncoder.daemon.encode(WriteNoteRequest(...))`, the daemon client's own codec with its
+escaping, against the daemon's request body limit (`WIRE_LIMITS.bodyBytes`, 5 MiB, inclusive).
+That is why `DailyDoListMobileDrawing` depends on `DailyDoListModels`. A 4 MiB PNG already exceeds
+the limit after base64 and JSON encoding. The check costs one serialization of the drawing per
+import, on the main actor.
+
+A photo load is bound to a `DrawingImageImportSession.Request`: the image it replaces and the
+insertion point are frozen when the user picks, a new request cancels the previous one, and a
+completion applies only while its request is current, because photo providers may finish after
+their task was cancelled. When the bytes arrive the controller rechecks edit authority (not read
+only or in view mode, the replaced image still present and unlocked). The photo and file pickers
+keep separate requests, so a late callback from one never applies to the other's target.
+
+`MobileDrawingLibrary` persists through an injected `Storage`: `load` and `save` of one serialized
+`.excalidrawlib`, which `save` replaces atomically and durably. It reads on first use (the library
+screen, or the first change), not at launch. `Storage.memory()` keeps nothing on disk. The iPhone
+app injects one library backed by a file in its managed storage root (`PhoneDrawingLibraryFile`).
+Earlier versions kept the library in `UserDefaults` (`drawing.library.v1`); `LegacyStorage` moves
+it, removing the legacy bytes only after storage returns exactly those bytes after saving them.
+Any failure keeps them and shows their shapes (insertable and exportable, not changeable) with the
+error, and the next use retries. A protected copy that differs from the legacy one is never
+overwritten: both are kept and reported until **Reset**, which empties both. Additions stay within
+what the library can read back: 1,000 items, 32 MB, 10,000 elements per item.

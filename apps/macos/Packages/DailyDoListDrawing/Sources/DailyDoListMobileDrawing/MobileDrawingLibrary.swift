@@ -1,63 +1,157 @@
-#if canImport(UIKit)
-  import Observation
-  import SwiftUI
-  import UniformTypeIdentifiers
+import DailyDoListDrawingCore
+import Foundation
+import Observation
 
-  /// Device-local reusable shapes. Inject a separate defaults suite for tests or app profiles.
-  @MainActor
-  @Observable
-  public final class MobileDrawingLibrary {
-    public static let shared = MobileDrawingLibrary()
-    public private(set) var items: [DrawingLibraryItem] = []
-    public private(set) var error: String?
-    @ObservationIgnored private let defaults: UserDefaults
-    @ObservationIgnored private let key: String
-    public init(defaults: UserDefaults = .standard, key: String = "drawing.library.v1") {
-      self.defaults = defaults
-      self.key = key
-      guard let data = defaults.data(forKey: key) else { return }
-      do { items = try DrawingLibraryCodec.decode(data) } catch {
-        self.error =
-          "The saved library could not be read. Export its original data before resetting it."
-      }
-    }
-    public var exportData: Data {
-      error == nil ? DrawingLibraryCodec.encode(items) : defaults.data(forKey: key) ?? Data()
-    }
-    public func add(_ scene: ExcalidrawScene, name: String) throws {
-      guard error == nil else { throw DrawingTransferError.invalid }
-      try save(
-        items + [DrawingLibraryItem(name: name.isEmpty ? "Saved shapes" : name, scene: scene)])
-    }
-    public func remove(_ id: String) throws { try save(items.filter { $0.id != id }) }
-    public func importData(_ data: Data) throws {
-      guard error == nil else { throw DrawingTransferError.invalid }
-      var known = Set(items.map(\.id))
-      let imported = try DrawingLibraryCodec.decode(data).map { item in
-        var value = item
-        if !known.insert(value.id).inserted {
-          value.id = UUID().uuidString
-          known.insert(value.id)
-        }
-        return value
-      }
-      try save(items + imported)
-    }
-    public func reset() {
-      items = []
-      error = nil
-      defaults.removeObject(forKey: key)
-    }
-    private func save(_ values: [DrawingLibraryItem]) throws {
-      guard error == nil else { throw DrawingTransferError.invalid }
-      let data = DrawingLibraryCodec.encode(values)
-      guard values.count <= 1000, data.count <= DrawingClipboard.maximumBytes else {
-        throw DrawingTransferError.tooLarge
-      }
-      defaults.set(data, forKey: key)
-      items = values
+public enum MobileDrawingLibraryError: LocalizedError, Equatable, Sendable {
+  case unavailable, unverifiedMove
+  public var errorDescription: String? {
+    switch self {
+    case .unavailable: "The shape library can't change until the problem shown above is resolved."
+    case .unverifiedMove: "Its protected copy could not be verified."
     }
   }
+}
+
+/// Device-local reusable shapes. The app injects persistence inside its managed storage; the
+/// library reads it on first use and writes the whole library on every change. Without injected
+/// storage nothing leaves memory.
+@MainActor
+@Observable
+public final class MobileDrawingLibrary {
+  /// One serialized library. `save` must replace it atomically and durably.
+  public struct Storage {
+    public var load: () throws -> Data?
+    public var save: (Data) throws -> Void
+    public init(load: @escaping () throws -> Data?, save: @escaping (Data) throws -> Void) {
+      self.load = load
+      self.save = save
+    }
+    public static func memory() -> Storage {
+      let box = MemoryBox()
+      return Storage(load: { box.data }, save: { box.data = $0 })
+    }
+    private final class MemoryBox { var data: Data? }
+  }
+
+  /// Where earlier versions kept the library: app preferences, outside managed storage.
+  public struct LegacyStorage {
+    public var load: () -> Data?
+    public var remove: () -> Void
+    public init(load: @escaping () -> Data?, remove: @escaping () -> Void) {
+      self.load = load
+      self.remove = remove
+    }
+    public static func userDefaults(_ defaults: UserDefaults, key: String = "drawing.library.v1")
+      -> LegacyStorage
+    {
+      LegacyStorage(
+        load: { defaults.data(forKey: key) }, remove: { defaults.removeObject(forKey: key) })
+    }
+  }
+
+  public private(set) var items: [DrawingLibraryItem] = []
+  public private(set) var error: String?
+  @ObservationIgnored private let storage: Storage
+  @ObservationIgnored private let legacy: LegacyStorage?
+  @ObservationIgnored private var loaded = false
+  /// Bytes the library could not read or move, exported verbatim.
+  @ObservationIgnored private var original: Data?
+
+  public init(storage: Storage, legacy: LegacyStorage? = nil) {
+    self.storage = storage
+    self.legacy = legacy
+  }
+
+  /// Reads the library on first use, and again after a failure (a locked device, a failed move).
+  /// A legacy copy is removed only once storage returns exactly its bytes after saving them;
+  /// until then it stays, and its shapes remain insertable and exportable.
+  public func loadIfNeeded() {
+    guard !loaded else { return }
+    let old = legacy?.load()
+    let data: Data?
+    do {
+      var stored = try storage.load()
+      if let old {
+        if stored == nil {
+          try storage.save(old)
+          stored = try storage.load()
+        }
+        guard stored == old else { throw MobileDrawingLibraryError.unverifiedMove }
+        legacy?.remove()
+      }
+      data = stored
+    } catch {
+      items = old.flatMap { try? DrawingLibraryCodec.decode($0) } ?? []
+      original = old
+      self.error =
+        old == nil
+        ? "The shape library could not be read. \(error.localizedDescription)"
+        : "The shape library could not be moved into protected storage, so its earlier copy was kept on this device. \(error.localizedDescription)"
+      return
+    }
+    loaded = true
+    do {
+      items = try data.map(DrawingLibraryCodec.decode) ?? []
+      original = nil
+      error = nil
+    } catch {
+      items = []
+      original = data
+      self.error =
+        "The saved library could not be read. Export its original data before resetting it."
+    }
+  }
+
+  public var exportData: Data { original ?? DrawingLibraryCodec.encode(items) }
+
+  public func add(_ scene: ExcalidrawScene, name: String) throws {
+    // More elements than an item may hold would make the whole library unreadable next time.
+    guard scene.elements.count <= 10_000 else { throw DrawingTransferError.tooLarge }
+    try update {
+      $0 + [DrawingLibraryItem(name: name.isEmpty ? "Saved shapes" : name, scene: scene)]
+    }
+  }
+  public func remove(_ id: String) throws { try update { $0.filter { $0.id != id } } }
+  public func importData(_ data: Data) throws {
+    let imported = try DrawingLibraryCodec.decode(data)
+    try update { items in
+      var known = Set(items.map(\.id))
+      return items
+        + imported.map { item in
+          var value = item
+          if !known.insert(value.id).inserted {
+            value.id = UUID().uuidString
+            known.insert(value.id)
+          }
+          return value
+        }
+    }
+  }
+  /// Replaces every copy, the legacy one included, with an empty library.
+  public func reset() throws {
+    try storage.save(DrawingLibraryCodec.encode([]))
+    legacy?.remove()
+    items = []
+    original = nil
+    error = nil
+    loaded = true
+  }
+  private func update(_ change: ([DrawingLibraryItem]) throws -> [DrawingLibraryItem]) throws {
+    loadIfNeeded()
+    guard error == nil else { throw MobileDrawingLibraryError.unavailable }
+    let values = try change(items)
+    let data = DrawingLibraryCodec.encode(values)
+    guard values.count <= 1000, data.count <= DrawingClipboard.maximumBytes else {
+      throw DrawingTransferError.tooLarge
+    }
+    try storage.save(data)
+    items = values
+  }
+}
+
+#if canImport(UIKit)
+  import SwiftUI
+  import UniformTypeIdentifiers
 
   struct DrawingLibraryDocument: FileDocument {
     static var readableContentTypes: [UTType] { [.json, .data] }
@@ -104,7 +198,8 @@
               }
               Button(item.name) {
                 perform {
-                  _ = try controller.editor.paste(item.scene, at: controller.insertionPoint)
+                  controller.finishEditing()
+                  try controller.insertShapes(item.scene, at: controller.insertionPoint)
                 }
               }
               .accessibilityHint("Insert these shapes into the drawing")
@@ -134,6 +229,7 @@
         }
       }
       .navigationTitle("Shape library")
+      .onAppear { controller.library.loadIfNeeded() }
       .fileImporter(isPresented: $importing, allowedContentTypes: [.json, .data]) { result in
         perform {
           let url = try result.get()
@@ -154,7 +250,7 @@
         if case .failure(let failure) = result { error = failure.localizedDescription }
       }
       .alert("Reset the device's shape library?", isPresented: $resetting) {
-        Button("Reset", role: .destructive) { controller.library.reset() }
+        Button("Reset", role: .destructive) { perform { try controller.library.reset() } }
         Button("Cancel", role: .cancel) {}
       } message: {
         Text("Saved library items are removed. Shapes already inserted in drawings remain.")

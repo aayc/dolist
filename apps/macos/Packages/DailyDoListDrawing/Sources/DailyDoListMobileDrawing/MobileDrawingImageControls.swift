@@ -8,9 +8,10 @@
     @State private var photo: PhotosPickerItem?
     @State private var importingFile = false
     @State private var choosingPhoto = false
-    @State private var replacing: String?
+    @State private var imports = DrawingImageImportSession()
+    @State private var photoRequest: DrawingImageImportSession.Request?
+    @State private var fileRequest: DrawingImageImportSession.Request?
     @State private var cropping: String?
-    @State private var error: String?
 
     private var selectedImage: ExcalidrawElement? {
       let selected = controller.editor.selectedElements
@@ -19,23 +20,11 @@
 
     var body: some View {
       Menu {
-        Button("Insert photo") {
-          replacing = nil
-          choosingPhoto = true
-        }
-        Button("Insert image file") {
-          replacing = nil
-          importingFile = true
-        }
+        Button("Insert photo") { choosePhoto(replacing: nil) }
+        Button("Insert image file") { chooseFile(replacing: nil) }
         if let selectedImage {
-          Button("Replace image from photos") {
-            replacing = selectedImage.id
-            choosingPhoto = true
-          }
-          Button("Replace image from file") {
-            replacing = selectedImage.id
-            importingFile = true
-          }
+          Button("Replace image from photos") { choosePhoto(replacing: selectedImage.id) }
+          Button("Replace image from file") { chooseFile(replacing: selectedImage.id) }
           Button("Crop image") { cropping = selectedImage.id }
           Button("Reset crop") { controller.editor.cropImage(selectedImage.id, rect: nil) }
         }
@@ -46,18 +35,20 @@
       .photosPicker(isPresented: $choosingPhoto, selection: $photo, matching: .images)
       .onChange(of: photo) { _, item in
         guard let item else { return }
-        Task {
-          do {
-            guard let data = try await item.loadTransferable(type: Data.self) else {
-              throw DrawingImageImportError.unreadable
-            }
-            try insert(data)
-          } catch { self.error = error.localizedDescription }
-          photo = nil
+        photo = nil
+        guard let request = photoRequest else { return }
+        photoRequest = nil
+        imports.load(request, bytes: { try await item.loadTransferable(type: Data.self) }) {
+          data, request in
+          try controller.insertImage(data, replacing: request.replacing, at: request.point)
         }
       }
+      // Leaving editing (read-only, view or zen mode) removes these controls.
+      .onDisappear { imports.cancel() }
       .fileImporter(isPresented: $importingFile, allowedContentTypes: [.image]) { result in
-        do {
+        guard let request = fileRequest else { return }
+        fileRequest = nil
+        imports.accept(request) {
           let url = try result.get()
           let access = url.startAccessingSecurityScopedResource()
           defer { if access { url.stopAccessingSecurityScopedResource() } }
@@ -65,39 +56,36 @@
           guard (values.fileSize ?? 0) <= EmbeddedDrawingImages.maximumBytes else {
             throw DrawingImageImportError.unreadable
           }
-          try insert(Data(contentsOf: url, options: .mappedIfSafe))
-        } catch { self.error = error.localizedDescription }
+          try controller.insertImage(
+            Data(contentsOf: url, options: .mappedIfSafe), replacing: request.replacing,
+            at: request.point)
+        }
       }
       .sheet(isPresented: Binding(get: { cropping != nil }, set: { if !$0 { cropping = nil } })) {
         if let id = cropping { MobileDrawingCrop(editor: controller.editor, id: id) }
       }
       .alert(
         "Image could not be inserted",
-        isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })
+        isPresented: Binding(
+          get: { imports.error != nil }, set: { if !$0 { imports.clearError() } })
       ) {
-        Button("OK", role: .cancel) { error = nil }
+        Button("OK", role: .cancel) { imports.clearError() }
       } message: {
-        Text(error ?? "")
+        Text(imports.error ?? "")
       }
     }
 
-    private func insert(_ bytes: Data) throws {
-      if StaticSVGImage.decode(bytes) != nil {
-        try controller.editor.insertImage(
-          data: bytes, mimeType: "image/svg+xml",
-          at: controller.insertionPoint, replacing: replacing)
-        return
-      }
-      // Normalize raster orientation and format once; preserve accepted SVG bytes verbatim.
-      guard let image = EmbeddedDrawingImages.decode(bytes),
-        let data = UIImage(cgImage: image).pngData()
-      else { throw DrawingImageImportError.unreadable }
-      let point =
-        controller.canvas.map {
-          $0.viewport.viewToScene(CGPoint(x: $0.bounds.midX, y: $0.bounds.midY))
-        } ?? .zero
-      try controller.editor.insertImage(
-        data: data, mimeType: "image/png", at: point, replacing: replacing)
+    private func choosePhoto(replacing id: String?) {
+      controller.finishEditing()
+      photoRequest = imports.begin(replacing: id, at: controller.insertionPoint)
+      fileRequest = nil
+      choosingPhoto = true
+    }
+    private func chooseFile(replacing id: String?) {
+      controller.finishEditing()
+      fileRequest = imports.begin(replacing: id, at: controller.insertionPoint)
+      photoRequest = nil
+      importingFile = true
     }
   }
 

@@ -8,6 +8,7 @@
       return canvas.viewport.viewToScene(CGPoint(x: canvas.bounds.midX, y: canvas.bounds.midY))
     }
     public func copySelection(cut: Bool = false) throws {
+      if cut { try requireEditable() }
       guard let scene = editor.copiedScene() else { return }
       let text = DrawingClipboard.encode(scene)
       guard text.utf8.count <= DrawingClipboard.maximumBytes else {
@@ -18,16 +19,19 @@
       ]
       if cut { editor.deleteSelection() }
     }
+    /// Like other explicit commands, a paste first ends a text edit or line in progress.
     public func pasteSelection() throws {
+      try requireEditable()
+      finishEditing()
       let pasteboard = UIPasteboard.general
       if let data = pasteboard.data(forPasteboardType: DrawingClipboard.contentType),
         let text = String(data: data, encoding: .utf8)
       {
-        _ = try editor.paste(DrawingClipboard.decode(text), at: insertionPoint)
+        try insertShapes(DrawingClipboard.decode(text), at: insertionPoint)
       } else if let text = pasteboard.string {
-        _ = try editor.paste(DrawingClipboard.decode(text), at: insertionPoint)
+        try insertShapes(DrawingClipboard.decode(text), at: insertionPoint)
       } else if let image = pasteboard.image, let data = image.pngData() {
-        _ = try editor.insertImage(data: data, mimeType: "image/png", at: insertionPoint)
+        try insertImage(data, at: insertionPoint)
       } else {
         throw DrawingTransferError.invalid
       }
@@ -39,12 +43,14 @@
         forPasteboardType: "app.dailydolist.drawing-style")
     }
     public func pasteStyle() throws {
+      try requireEditable()
       guard
         let data = UIPasteboard.general.data(forPasteboardType: "app.dailydolist.drawing-style"),
         data.count <= DrawingClipboard.maximumBytes, let text = String(data: data, encoding: .utf8),
         let object = try JSONParser.parse(text).objectValue, let value = ElementCodec.decode(object)
       else { throw DrawingTransferError.invalid }
-      editor.pasteStyle(from: value)
+      finishEditing()
+      try importChecked { $0.pasteStyle(from: value) }
     }
     public func copySelectionSVG() throws {
       guard let scene = editor.copiedScene() else { return }

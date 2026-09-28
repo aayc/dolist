@@ -37,4 +37,18 @@ struct InteractionCheckpointTests {
     #expect(!editor.hasActiveInteraction && completions == 1)
     #expect(editor.scene.visibleElements.isEmpty && !editor.canUndo)
   }
+
+  @Test func aLateImportIsRefusedRatherThanEndingTheUsersGesture() {
+    let editor = DrawingEditor(scene: .init(), environment: DeterministicDrawingEnvironment())
+    editor.tool = .rectangle
+    editor.pointerDown(at: .zero)
+    editor.pointerDragged(to: DrawingPoint(80, 60))
+    #expect(throws: DrawingTransferError.interactionInProgress) {
+      try editor.validatedImport(
+        validate: { _ in }, operation: { _ in Issue.record("The import ran") })
+    }
+    #expect(editor.hasActiveInteraction)
+    editor.pointerUp(at: DrawingPoint(80, 60))
+    #expect(editor.scene.visibleElements.count == 1)
+  }
 }
