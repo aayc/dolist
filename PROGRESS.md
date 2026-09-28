@@ -106,7 +106,7 @@ is still granted. Never kill Daily Do List processes by name; never bind or kill
 
 ## In flight
 
-- Full native iPhone app: `codex/iphone-app`, checkpoint `9fe1ac9` pushed, with current main
+- Full native iPhone app: `codex/iphone-app`, checkpoint `79e928f` pushed, with current main
   host-continuity fixes merged. Native pairing/Keychain, identity guard, durable notes/composers/
   captures, Inbox/agent UI and shared native drawing engine are integrated. Real simulator CUA
   passed HTTPS pairing, task→mock-agent result/artifact, capture, offline edit→terminate/relaunch,
@@ -129,13 +129,13 @@ is still granted. Never kill Daily Do List processes by name; never bind or kill
   Navigation restores open/closed notes, Back/Forward, caret and scrolling; CUA passed selected-note
   restoration and Back after relaunch. Offline daily/weekly creation uses downloaded templates;
   cached Inbox/conversations/artifacts now hydrate on cold launch with controls gated by fresh host
-  authority. The combined native suite and repository checks pass. Shared inline badges and scoped drawing/attachment embeds are integrated; CUA passed badge-to-thread navigation and drawing insertion. Root next owns downloads/recovery composition and final integration; parallel work covers native tables/callouts/backlinks, durable offline attachment uploads and commands.
+  authority. The combined native suite and repository checks pass. Shared inline badges and scoped drawing/attachment embeds are integrated; CUA passed badge-to-thread navigation and drawing insertion. Native tables/callouts/backlinks, durable Photos/Files attachment imports, downloads/pins/storage controls, command palette/hardware keyboard and safe link previews are now composed. The latest full signed simulator suite, 309 shared Mac Editor tests and repository checks pass. CUA passed table edit/Undo, callout folding, backlinks, byte-preserving Photos import and Quick Open; the modal-shortcut fix passed repeat CUA. Remaining streams cover strict storage protection, bounded search, drawing import safety and recovery staging cleanup; full feature CUA continues.
 - All four branch workflows passed on `cebe37c`: web CI, macOS/iPhone/shared-iOS, security
   and Linux packaging. The replica bootstrap race is fixed by waiting for the stable workspace
   before observing relay recovery. Native badge/chip extraction passes 26 Mac regressions;
   the combined signed simulator suite and full repository checks pass. Typed verified recovery
   export/conditional Forget and checkpoint-safe storage cleanup are integrated. CUA found an embed
-  menu touch being intercepted by the hidden markdown link; the fix is under focused verification.
+  menu touch being intercepted by the hidden markdown link; the fix passed native verification and repeat CUA. Fresh full workflows were dispatched on `79e928f`.
   The Mac window-opening budget failure is reproduced on the unchanged local baseline (~6.4 s);
   it passes CI, and no budget was widened.
   Scope: `docs/specs/iphone-implementation-streams.md`; durable instruction and evidence:
