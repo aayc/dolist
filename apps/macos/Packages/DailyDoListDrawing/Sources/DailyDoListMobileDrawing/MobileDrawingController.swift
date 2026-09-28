@@ -12,6 +12,9 @@
     public var library: MobileDrawingLibrary = .shared
     @ObservationIgnored public var onOpenLink: ((String) -> Void)?
     @ObservationIgnored public var elementLink: ((String) -> String?)?
+    @ObservationIgnored public var importContext: () -> DrawingImportContext = {
+      DrawingImportContext()
+    }
     public var isEditing = true
     public var viewOnly = false
     public var zenMode = false

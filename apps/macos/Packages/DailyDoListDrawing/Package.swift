@@ -12,14 +12,19 @@ let package = Package(
     .library(name: "DailyDoListMobileDrawing", targets: ["DailyDoListMobileDrawing"]),
   ],
   dependencies: [
-    .package(path: "../DailyDoListUI")
+    .package(path: "../DailyDoListUI"), .package(path: "../DailyDoListModels"),
   ],
   targets: [
     .target(name: "DailyDoListDrawingModel"),
     .target(
       name: "DailyDoListDrawingCore", dependencies: ["DailyDoListDrawingModel"],
       resources: [.copy("Resources/Fonts")]),
-    .target(name: "DailyDoListMobileDrawing", dependencies: ["DailyDoListDrawingCore"]),
+    .target(
+      name: "DailyDoListMobileDrawing",
+      dependencies: [
+        "DailyDoListDrawingCore",
+        .product(name: "DailyDoListModels", package: "DailyDoListModels"),
+      ]),
     .target(
       name: "DailyDoListDrawing",
       dependencies: [

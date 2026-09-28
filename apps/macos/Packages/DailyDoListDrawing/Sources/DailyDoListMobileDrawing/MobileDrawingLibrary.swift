@@ -104,7 +104,7 @@
               }
               Button(item.name) {
                 perform {
-                  _ = try controller.editor.paste(item.scene, at: controller.insertionPoint)
+                  try controller.insertShapes(item.scene, at: controller.insertionPoint)
                 }
               }
               .accessibilityHint("Insert these shapes into the drawing")
