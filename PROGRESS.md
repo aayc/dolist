@@ -113,10 +113,12 @@ is still granted. Never kill Daily Do List processes by name; never bind or kill
   and fixed a sync that dropped pending edits during a refresh, and added hardware
   Tab/Shift-Tab and the release of hidden editors. Current state, evidence and what remains:
   [TRANSFER.md section 0](https://github.com/aayc/dolist/blob/codex/iphone-app/apps/mobile/TRANSFER.md).
-  228/228 native tests, the device build and `pnpm check` pass. Computer-use acceptance is
-  blocked until the user grants the Cursor computer-use helper Accessibility and Screen
-  Recording. Relative wikilink resolution awaits a user decision (it would change which note
-  existing links open on every client). No iPhone Vim. Do not mark the app complete.
+  230/230 native tests, the device build and `pnpm check` pass. Links now resolve like web and
+  Mac (the user's choice). Computer use passed the transfer's table-image recheck (bytes and
+  preview verified), hardware Tab, search and sync; it found two protection bugs, now fixed.
+  **Open:** a live storage-protection change from Settings still can't drain its workspace
+  (SwiftUI keeps it); the change completes safely on the next launch. No iPhone Vim. Do not mark
+  the app complete.
 - **CI speed (same session, on `codex/iphone-app`):** the iPhone job caches its build, builds for
   a device only on `main` and skips coverage. A full run still takes 8–14 minutes (mostly the
   simulator's first boot), but a branch whose iPhone sources already passed skips it in 15 s,
