@@ -94,15 +94,18 @@ final class PhoneWorkspace {
     guard !hydrated else { return }
     do {
       settings = try await cache.settings()?.value
-      let cached = try await repository.notes()
+      // Metadata only: a large vault's documents are read when opened, not all at launch.
+      let local = try await repository.cachedDocumentMetadata()
       entries = try await cache.tree()?.value.entries ?? []
-      includeLocalNotes(cached)
-      includeLocalDrawings(try await drawingRepository.drawings())
+      includeLocalDocuments(local)
       includeAttachments(try await attachmentUploads.uploads())
       try await restoreNavigation()
-      if active == nil, activeDrawing == nil, tabs.active == nil, let first = cached.first {
-        show(first)
-        tabs.place(first.path)
+      if active == nil, activeDrawing == nil, tabs.active == nil,
+        let first = local.first(where: { !DrawingFileName.isDrawingPath($0.path) }),
+        let note = try await repository.note(first.path)
+      {
+        show(note)
+        tabs.place(note.path)
       }
       structuralOperations = try await structural.unresolved()
       await loadCaptures()
@@ -287,10 +290,9 @@ final class PhoneWorkspace {
       try await cache.storeTree(tree, replacing: revision)
       guard epoch == generation else { return }
       entries = tree.entries
-      includeLocalNotes(try await repository.notes())
-      includeLocalDrawings(try await drawingRepository.drawings())
+      includeLocalDocuments(try await repository.cachedDocumentMetadata())
       includeAttachments(try await attachmentUploads.uploads())
-      try await downloadNewPinnedPaths()
+      try await downloadPinnedUpdates(tree.entries)
     } catch WorkspaceRepositoryError.concurrentWrite {
       // A newer fetch/event already won. Its snapshot is the one to display.
     } catch { if epoch == generation { self.error = error.localizedDescription } }
@@ -442,9 +444,18 @@ final class PhoneWorkspace {
   }
 
   func includeLocalNotes(_ notes: [LocalNote]) {
+    includeLocalFiles(notes.map { ($0.path, $0.baseVersion) })
+  }
+
+  func includeLocalDocuments(_ documents: [CachedDocumentMetadata]) {
+    includeLocalFiles(documents.map { ($0.path, $0.baseVersion) })
+  }
+
+  /// Files saved here that the host's tree doesn't list yet (offline creations, pending uploads).
+  func includeLocalFiles(_ files: [(path: String, version: String?)]) {
     let known = Set(entries.map(\.path))
-    entries += notes.filter { !known.contains($0.path) }.map {
-      VaultEntry(path: $0.path, kind: .file, version: $0.baseVersion)
+    entries += files.filter { !known.contains($0.path) }.map {
+      VaultEntry(path: $0.path, kind: .file, version: $0.version)
     }
     entries.sort { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
   }

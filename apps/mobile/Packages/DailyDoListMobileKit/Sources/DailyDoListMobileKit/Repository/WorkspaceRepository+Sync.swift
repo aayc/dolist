@@ -6,10 +6,10 @@ extension WorkspaceRepository {
   /// durable attempt intact. A later foreground pass reconciles it before any new write.
   @discardableResult
   public func synchronize(with remote: any WorkspaceRemote) async throws -> [LocalNote] {
-    guard !synchronizing else { return [] }
-    synchronizing = true
-    defer { synchronizing = false }
     let generation = connectionGeneration
+    await passes.begin()
+    defer { passes.end() }
+    try checkConnection(generation)
     try await verify(remote, generation: generation)
     var changed: [LocalNote] = []
     let pendingWrites = try index.outbox().filter { !WorkspaceDocumentPath.isDrawing($0.path) }
@@ -36,13 +36,14 @@ extension WorkspaceRepository {
   }
 
   /// Refreshes a cached read without writing it back. Deleted clean entries disappear; a dirty
-  /// deleted document becomes a recovery draft. Concurrent replay owns its own refresh.
+  /// deleted document becomes a recovery draft. Waits for a pass in progress, then reads the
+  /// host's current version: the result is never an older cached copy presented as fresh.
   public func refresh(path: String, with remote: any WorkspaceRemote) async throws -> LocalNote? {
     try Self.validatePath(path)
-    guard !synchronizing else { return try note(path) }
-    synchronizing = true
-    defer { synchronizing = false }
     let generation = connectionGeneration
+    await passes.begin()
+    defer { passes.end() }
+    try checkConnection(generation)
     try await verify(remote, generation: generation)
     let received = try await remote.readNote(path)
     try checkConnection(generation)

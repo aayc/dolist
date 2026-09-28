@@ -4,10 +4,10 @@ import Foundation
 extension DrawingRepository {
   @discardableResult
   public func synchronize(with remote: any WorkspaceRemote) async throws -> [LocalDrawing] {
-    guard !synchronizing else { return [] }
-    synchronizing = true
-    defer { synchronizing = false }
     let current = generation
+    await passes.begin()
+    defer { passes.end() }
+    try check(current)
     try await verify(remote, generation: current)
     let pending = try index.outbox().filter { WorkspaceDocumentPath.isDrawing($0.path) }.sorted {
       if ($0.attempt != nil) != ($1.attempt != nil) { return $0.attempt != nil }
@@ -25,14 +25,15 @@ extension DrawingRepository {
     return result
   }
 
-  /// Read-only refresh merges into local scene edits but does not send them from this call.
+  /// Read-only refresh merges into local scene edits but does not send them from this call. Like
+  /// the note repository's, it waits for a pass in progress instead of returning the cached copy.
   public func refresh(path: String, with remote: any WorkspaceRemote) async throws -> LocalDrawing?
   {
     try Self.validatePath(path)
-    guard !synchronizing else { return try drawing(path) }
-    synchronizing = true
-    defer { synchronizing = false }
     let current = generation
+    await passes.begin()
+    defer { passes.end() }
+    try check(current)
     try await verify(remote, generation: current)
     let received = try await remote.readNote(path)
     try check(current)

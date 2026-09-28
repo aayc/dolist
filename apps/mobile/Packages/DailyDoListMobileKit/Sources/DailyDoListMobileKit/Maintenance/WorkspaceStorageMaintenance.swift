@@ -87,6 +87,30 @@ public actor WorkspaceStorageMaintenance {
     try store.requestDownloads(selection, paths: paths, maxBytes: maxBytes, at: clock())
   }
 
+  /// Pass the host's tree (not local-only entries). Queues pinned files it lists for the first
+  /// time, and downloaded clean ones whose host version changed. Requested, failed and cancelled
+  /// downloads keep their state: retrying or reviving them stays the person's choice.
+  @discardableResult
+  public func requestPinnedUpdates(tree: [VaultEntry]) throws -> [DocumentDownloadRequest] {
+    let snapshot = try store.storageSnapshot()
+    let requests = Dictionary(
+      snapshot.downloads.map { ($0.path, $0.state) }, uniquingKeysWith: { _, new in new })
+    let documents = Dictionary(
+      snapshot.documents.map { ($0.path, $0) }, uniquingKeysWith: { _, new in new })
+    let paths = tree.filter { entry in
+      guard entry.kind == .file, entry.path.hasSuffix(".md") else { return false }
+      guard let state = requests[entry.path] else { return true }
+      guard state == .available, let record = documents[entry.path], record.state == .synced
+      else { return false }
+      return entry.version != nil && entry.version != record.baseVersion
+    }.map(\.path)
+    var queued: [DocumentDownloadRequest] = []
+    for selection in snapshot.selections where paths.contains(where: selection.contains) {
+      queued += try requestDownload(selection, paths: paths)
+    }
+    return queued
+  }
+
   public func beginDownload(_ path: String) throws -> DocumentDownloadTicket {
     try store.beginDownload(path, at: clock())
   }

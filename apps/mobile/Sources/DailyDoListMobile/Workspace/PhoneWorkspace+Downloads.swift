@@ -2,6 +2,7 @@ import DailyDoListClient
 import DailyDoListDomain
 import DailyDoListDrawingModel
 import DailyDoListMobileKit
+import DailyDoListModels
 import Foundation
 
 extension PhoneWorkspace {
@@ -39,16 +40,8 @@ extension PhoneWorkspace {
     } catch { self.error = error.localizedDescription }
   }
 
-  func downloadNewPinnedPaths() async throws {
-    let storage = try storageMaintenance()
-    let inventory = try await storage.inventory(protecting: liveDocumentPaths)
-    let known = Set(inventory.downloads.map(\.path))
-    let paths = entries.filter {
-      $0.kind == .file && $0.path.hasSuffix(".md") && !known.contains($0.path)
-    }.map(\.path)
-    for selection in inventory.selections where paths.contains(where: selection.contains) {
-      _ = try await storage.requestDownload(selection, paths: paths)
-    }
+  func downloadPinnedUpdates(_ tree: [VaultEntry]) async throws {
+    try await storageMaintenance().requestPinnedUpdates(tree: tree)
     startDownloads()
   }
 
@@ -84,6 +77,8 @@ extension PhoneWorkspace {
             .staleDownload
           { continue }
           self.downloadingPath = request.path
+          // Resuming an attempt issues a new request id; Cancel must see it before the read.
+          await self.updateStorageInventory()
           do {
             let remote = try HTTPWorkspaceRemote(
               client: client, scope: self.repository.scope,
@@ -137,6 +132,9 @@ extension PhoneWorkspace {
       // Its immutable ticket rejects a late completion; the authenticated snapshot remains a
       // disposable cache read, never an upload or an action.
       await updateStorageInventory()
+    } catch WorkspaceStorageError.staleDownload {
+      await updateStorageInventory()
+      error = "This download restarted before it could be cancelled. Cancel it again to stop it."
     } catch { self.error = error.localizedDescription }
   }
 

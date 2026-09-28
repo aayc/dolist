@@ -66,11 +66,8 @@ extension PhoneWorkspace {
   }
 
   func includeAttachments(_ uploads: [AttachmentUpload]) {
-    let known = Set(entries.map(\.path))
-    entries += uploads.filter { $0.state != .cancelled && !known.contains($0.path) }.map {
-      VaultEntry(path: $0.path, kind: .file, version: $0.receipt?.version)
-    }
-    entries.sort { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+    includeLocalFiles(
+      uploads.filter { $0.state != .cancelled }.map { ($0.path, $0.receipt?.version) })
   }
 
   func pendingAttachment(_ path: String) async throws -> MobileEditorAttachment? {

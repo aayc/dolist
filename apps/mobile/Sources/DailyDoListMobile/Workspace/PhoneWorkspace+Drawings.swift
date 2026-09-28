@@ -120,10 +120,6 @@ extension PhoneWorkspace {
   }
 
   func includeLocalDrawings(_ drawings: [LocalDrawing]) {
-    let known = Set(entries.map(\.path))
-    entries += drawings.filter { !known.contains($0.path) }.map {
-      VaultEntry(path: $0.path, kind: .file, version: $0.baseVersion)
-    }
-    entries.sort { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+    includeLocalFiles(drawings.map { ($0.path, $0.baseVersion) })
   }
 }

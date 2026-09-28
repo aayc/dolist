@@ -25,6 +25,28 @@ struct WorkspaceRepositoryTests {
     }
   }
 
+  @Test func refreshAndReplayWaitForAPassInProgressInsteadOfSkippingIt() async throws {
+    let fixture = try RepositoryFixture()
+    defer { fixture.remove() }
+    let repository = try fixture.open()
+    _ = try await repository.cache(RemoteNote(content: "Old A", version: "a1"), path: "A.md")
+    let remote = RepositoryRemote(scope: fixture.scope)
+    await remote.replace("A.md", with: RemoteNote(content: "Fresh A", version: "a2"))
+    _ = try await repository.create(path: "B.md", content: "Sent first")
+    await remote.pauseNextWrite()
+    let first = Task { try await repository.synchronize(with: remote) }
+    await remote.waitForPausedWrite()
+    let refreshed = Task { try await repository.refresh(path: "A.md", with: remote) }
+    _ = try await repository.create(path: "C.md", content: "Typed during the pass")
+    let second = Task { try await repository.synchronize(with: remote) }
+    while await repository.queuedPasses < 2 { await Task.yield() }
+    await remote.releaseWrite()
+    _ = try await first.value
+    #expect(try await refreshed.value?.content == "Fresh A")
+    _ = try await second.value
+    #expect(await remote.writes.map(\.content) == ["Sent first", "Typed during the pass"])
+  }
+
   @Test func liveEditorMergeConflictPreservesRemoteAndStopsAutomaticReplay() async throws {
     let fixture = try RepositoryFixture()
     defer { fixture.remove() }
@@ -297,6 +319,10 @@ struct RepositoryFixture {
 }
 
 enum TestNetworkError: Error { case disconnected }
+
+extension WorkspaceRepository {
+  var queuedPasses: Int { passes.queued }
+}
 
 actor RepositoryRemote: WorkspaceRemote {
   nonisolated let profileID: UUID

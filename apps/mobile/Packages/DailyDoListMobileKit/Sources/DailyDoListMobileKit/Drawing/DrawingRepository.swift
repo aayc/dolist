@@ -9,7 +9,7 @@ public actor DrawingRepository {
   let index: any WorkspaceIndex
   let checkpoints: any NoteCheckpointStore
   var generation: UInt64 = 0
-  var synchronizing = false
+  let passes = RepositoryPasses()
 
   public init(rootDirectory: URL, scope: WorkspaceScope) throws {
     self.scope = scope

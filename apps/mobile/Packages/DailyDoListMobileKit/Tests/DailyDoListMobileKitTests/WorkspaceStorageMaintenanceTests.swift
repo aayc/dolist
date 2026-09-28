@@ -1,5 +1,6 @@
 import DailyDoListAgentCore
 import DailyDoListDrawingModel
+import DailyDoListModels
 import Foundation
 import SQLite3
 import Testing
@@ -153,6 +154,33 @@ struct WorkspaceStorageMaintenanceTests {
     #expect(
       try await restarted.inventory().downloads.first { $0.path == failure.path }?.failure
         == .tooLarge)
+  }
+
+  @Test func pinnedUpdatesQueueNewAndChangedFilesButLeaveChoicesAndLocalWorkAlone() async throws {
+    let fixture = try RepositoryFixture()
+    defer { fixture.remove() }
+    let repository = try fixture.open()
+    let maintenance = try WorkspaceStorageMaintenance(
+      rootDirectory: fixture.directory, scope: fixture.scope)
+    let paths = ["Pinned/Changed.md", "Pinned/Same.md", "Pinned/Edited.md", "Pinned/Cancelled.md"]
+    _ = try await maintenance.requestDownload(.folder("Pinned"), paths: paths)
+    for path in paths {
+      let ticket = try await maintenance.beginDownload(path)
+      guard path != "Pinned/Cancelled.md" else {
+        try await maintenance.cancelDownload(path, id: ticket.id)
+        continue
+      }
+      let note = try await repository.cache(RemoteNote(content: path, version: "v1"), path: path)
+      try await maintenance.completeDownload(ticket, expectedRevision: note.localRevision)
+    }
+    let edited = try #require(try await repository.note("Pinned/Edited.md"))
+    _ = try await repository.save(
+      path: edited.path, content: "Local typing", expectedRevision: edited.localRevision)
+    let tree = (paths + ["Pinned/New.md", "Elsewhere/New.md"]).map {
+      VaultEntry(path: $0, kind: .file, version: $0 == "Pinned/Same.md" ? "v1" : "v2")
+    }
+    let queued = try await maintenance.requestPinnedUpdates(tree: tree)
+    #expect(queued.map(\.path).sorted() == ["Pinned/Changed.md", "Pinned/New.md"])
   }
 
   @Test func forgettingCleanWorkspaceAlsoClearsPinsAndDownloadRequests() async throws {
