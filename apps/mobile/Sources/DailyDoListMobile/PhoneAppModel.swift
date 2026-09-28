@@ -158,13 +158,11 @@ final class PhoneAppModel {
       self.error = error.localizedDescription
       throw error
     }
-    if defaults.string(forKey: "selectedConnection") == scope.profileID.uuidString {
-      defaults.removeObject(forKey: "selectedConnection")
-    }
   }
 
   /// A retired namespace is the durable record that the user already completed Forget. Finish
-  /// only that exact profile's remaining cleanup; an interrupted Keychain operation is retryable.
+  /// only that exact profile's remaining cleanup. Every step is idempotent, and the profile goes
+  /// last: it is what `start()` enumerates to resume cleanup after an interruption.
   private func finishRetiredConnection(_ profile: ConnectionProfile) async throws -> Bool {
     guard let workspaceID = profile.workspaceID, let hostID = profile.hostID else { return false }
     let scope = WorkspaceScope(
@@ -174,13 +172,14 @@ final class PhoneAppModel {
       rootDirectory: root.appendingPathComponent("workspaces"), scope: scope)
     guard try await recovery.isRetired() else { return false }
     try await recovery.forget()
-    try await connection.removeRetiredProfile(profile.id)
     await integrations?.clearNotifications(for: scope)
+    try await exportStaging.removeAbandoned(for: profile.id)
     workspaces[profile.id] = nil
     if workspace?.profile.id == profile.id { workspace = nil }
     if defaults.string(forKey: "selectedConnection") == profile.id.uuidString {
       defaults.removeObject(forKey: "selectedConnection")
     }
+    try await connection.removeRetiredProfile(profile.id)
     return true
   }
 

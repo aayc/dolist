@@ -225,12 +225,13 @@ reported, and a failed removal throws `cleanupFailed` after trying the rest so i
 
 `forget()` refuses protected local work. After offering sync or export, only an explicit discard
 choice may call `forget(discardUnsyncedWork: true)`. The app first fences/cancels editors and
-connection work, then invokes forget, and removes the Keychain credential/profile only after it
-succeeds. A committed namespace tombstone fences existing SQLite handles and future ordinary
-opens; forgotten work cannot reappear from stale callbacks. Checkpoint removal follows that
-transaction and can be retried by a new recovery owner after a crash or filesystem error. Keep
-the small tombstone database; pairing again uses a fresh profile UUID. This is ordinary local
-data removal, not a claim of forensic secure erasure.
+connection work, then invokes forget. Only after it succeeds does it clear that profile's alerts,
+staged exports and selection, and it removes the Keychain credential/profile last, since the
+profile is what a restart enumerates to resume cleanup. A committed namespace tombstone fences
+existing SQLite handles and future ordinary opens; forgotten work cannot reappear from stale
+callbacks. Checkpoint removal follows that transaction and can be retried by a new recovery owner
+after a crash or filesystem error. Keep the small tombstone database; pairing again uses a fresh
+profile UUID. This is ordinary local data removal, not a claim of forensic secure erasure.
 ## Agent action receipts
 
 `MobileAgentMutationJournal` implements AgentCore's optional `AgentMutationJournal`. Construct an
