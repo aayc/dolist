@@ -33,8 +33,8 @@ the daemon it starts (here: the scripted agent, no API key).
 ## Layout
 
 The app is one SwiftPM package (the shell) that composes independent local packages. Each package
-builds and tests on its own. The packages marked "iOS" are Foundation-only and meant for the
-future iPhone app too.
+builds and tests on its own. The packages marked "iOS" are Foundation-only; the iPhone app
+(`apps/mobile`) links them.
 
 | Path | Responsibility |
 | --- | --- |
@@ -741,7 +741,7 @@ strictly: unknown keys, wrong types, out-of-range numbers and text over the caps
   `VimAppTests` cover ex commands, the status bar, the vimrc and the clipboard in the app. See the
   [editor README](Packages/DailyDoListEditor/README.md#vim-mode).
 - **CI**: `.github/workflows/macos.yml` runs the packages' tests in three parallel groups, the
-  integration tests and the iOS build alongside, each restoring its build directory from a cache;
+  integration tests and the iPhone app alongside, each restoring its build directory from a cache;
   main (or a manual run with `release`) also builds the release app with the bundled daemon and
   uploads the zip ([docs/CI.md](../../docs/CI.md#macos-app-macosyml)).
 - **Performance**: `PerformanceTests` in the app (launch, the window, a new note arriving and the

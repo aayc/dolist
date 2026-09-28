@@ -6,28 +6,30 @@
 // Changed and new files get the current time, which always differs from any recorded one, so
 // they (and whatever depends on them) are rebuilt.
 //
-//   node apps/macos/scripts/ci-mtimes.mjs restore <build dir>   # after restoring the cache
-//   node apps/macos/scripts/ci-mtimes.mjs save <build dir>      # after building, before saving it
+//   node apps/macos/scripts/ci-mtimes.mjs restore <build dir> [<path>…]   # after restoring the cache
+//   node apps/macos/scripts/ci-mtimes.mjs save <build dir> [<path>…]      # after building, before saving it
 //
-// Times are whole seconds, so they survive any archive format exactly. Run `restore` before
-// every build, a cold one included: the times the build records must be the ones `save` keeps.
+// The paths (default apps/macos) are the sources the build reads. Times are whole seconds, so
+// they survive any archive format exactly. Run `restore` before every build, a cold one
+// included: the times the build records must be the ones `save` keeps.
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const [command, buildDir] = process.argv.slice(2);
+const [command, buildDir, ...paths] = process.argv.slice(2);
 if (!["restore", "save"].includes(command) || !buildDir) {
-  console.error("usage: ci-mtimes.mjs restore|save <build dir>");
+  console.error("usage: ci-mtimes.mjs restore|save <build dir> [<path>…]");
   process.exit(2);
 }
 // The checkout this script is in (apps/macos/scripts/), wherever it runs from.
 const repo = fileURLToPath(new URL("../../../", import.meta.url));
 const manifest = join(resolve(buildDir), "ci-mtimes.json");
 
-/** Tracked files under apps/macos: path → blob id. */
+/** Tracked files under the paths: path → blob id. */
 function trackedFiles() {
-  const out = execFileSync("git", ["-C", repo, "ls-files", "-s", "-z", "--", "apps/macos"], {
+  const scope = paths.length > 0 ? paths : ["apps/macos"];
+  const out = execFileSync("git", ["-C", repo, "ls-files", "-s", "-z", "--", ...scope], {
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });

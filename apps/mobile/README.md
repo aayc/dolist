@@ -21,8 +21,8 @@ apps/mobile/scripts/run-simulator.sh --editor-spike  # synthetic input lab, Debu
 `DDL_IOS_DESTINATION` selects an Xcode destination for build/test. `DDL_IOS_SIMULATOR_ID` selects
 a device for the launch script. Otherwise scripts choose an installed iPhone. Open Simulator to
 see it. Generated projects, derived data and local signing settings are ignored. CI runs the
-`iPhone app` workflow; it also builds for a physical iPhone SDK without signing. That compilation
-is not evidence of physical-device behavior. Simulator builds use an ad-hoc signature and a
+`iPhone app` workflow (`ios.yml`); on `main` it also builds for a physical iPhone SDK without
+signing. That compilation is not evidence of physical-device behavior. Simulator builds use an ad-hoc signature and a
 simulator-only application/Keychain identity; no developer membership is required. Do not turn
 signing off for simulator runs: the real Keychain correctly rejects a build without that identity.
 Physical builds get their identity from normal Xcode Personal Team provisioning.

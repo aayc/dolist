@@ -1,12 +1,12 @@
 name: macOS app
 
-# The native Swift app (apps/macos), in parallel jobs: the Swift packages' tests in three groups,
-# the integration tests against the real daemon (mock agent), and the iOS build of the shared
-# packages. Each Swift job restores its SwiftPM build directory from a cache, so a run only
-# recompiles what changed. The release "Daily Do List.app" with the bundled daemon is built (and
-# uploaded) on main, or on demand with the `release` input. Runs when the app, the daemon, what the
-# daemon bundles or the vim behavior vectors the Swift engine replays change (keep both path lists
-# in sync).
+# The native Swift apps, in parallel jobs: the Swift packages' tests in three groups, the
+# integration tests against the real daemon (mock agent), and the iPhone app (ios.yml, which also
+# builds the shared packages for iOS). Each Swift job restores its build directory from a cache, so
+# a run only recompiles what changed, and the last job deletes the caches a run superseded. The
+# release "Daily Do List.app" with the bundled daemon is built (and uploaded) on main, or on demand
+# with the `release` input. Runs when the apps, the daemon, what the daemon bundles or the vim
+# behavior vectors the Swift engine replays change (keep both path lists in sync).
 on:
   push:
     branches: [main]
@@ -74,6 +74,8 @@ env:
 jobs:
   iphone:
     uses: ./.github/workflows/ios.yml
+    with:
+      device: ${{ inputs.release == true }}
 
   packages:
     name: Swift packages (${{ matrix.group }})
@@ -222,34 +224,6 @@ jobs:
           path: apps/macos/.build
           key: swiftpm-${{ steps.xcode.outputs.key }}-integration-${{ steps.key.outputs.sources }}
 
-  ios:
-    name: Shared packages build for iOS
-    runs-on: macos-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Select the newest Xcode
-        run: apps/macos/scripts/ci-select-xcode.sh
-
-      - name: Build for iOS
-        # The Foundation-only packages the planned iPhone app reuses must not pick up AppKit.
-        # DailyDoListComputer (the ddl-computer helper) is macOS-only, so it isn't listed.
-        # `package:scheme` builds one library of a package (DailyDoListDrawing's model; its
-        # renderer and canvas are AppKit).
-        run: |
-          for entry in DailyDoListModels DailyDoListClient DailyDoListDomain DailyDoListVim \
-            DailyDoListDrawing:DailyDoListDrawingModel; do
-            pkg="${entry%%:*}"
-            scheme="${entry#*:}"
-            echo "::group::$scheme"
-            (cd "apps/macos/Packages/$pkg" && xcodebuild build -quiet -scheme "$scheme" \
-              -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO)
-            echo "::endgroup::"
-          done
-
   release:
     name: Release app (bundled daemon)
     # On main, and on demand; branches compile the app target in the app group's tests.
@@ -311,3 +285,30 @@ jobs:
           path: "apps/macos/build/Daily Do List.zip"
           if-no-files-found: error
           retention-days: 14
+
+  prune-caches:
+    name: Prune superseded build caches
+    # Every changed commit saves new build caches; the older ones on the same branch only crowd
+    # out the caches other branches restore from (the repository's cache space is limited).
+    # Fork pull requests get a read-only token, so they can't delete anything.
+    needs: [iphone, packages, integration, release]
+    if: >-
+      !cancelled() && (github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Keep the newest build cache of each job on this branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REF: ${{ github.ref }}
+        # Keys end in the sources' 40-hex git hash; everything before it names the job's cache.
+        run: |
+          gh cache list --ref "$REF" --limit 1000 --json id,key,createdAt --jq '
+            [.[] | select(.key | test("^(swiftpm|iphone)-"))]
+            | group_by(.key | sub("-[0-9a-f]{40}$"; ""))
+            | map(sort_by(.createdAt) | .[:-1][]) | .[].id' |
+            while read -r id; do gh cache delete "$id"; done

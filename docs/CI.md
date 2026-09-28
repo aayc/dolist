@@ -6,9 +6,10 @@ reproduced locally with the commands below. Jobs share one setup step, `.github/
 
 | Workflow | Declared triggers | Jobs |
 | --- | --- | --- |
-| CI (`ci.yml`) | push to `main`, pull requests, merge queue, manual | `check`, `test` (3 shards), `test-macos` (2), `bench`, `e2e` (4), `perf`, `vim`, `evals-mock` |
+| CI (`ci.yml`) | push to `main`, pull requests, merge queue, manual | `check`, `test` (3 shards), `test-macos` (2), `bench`, `e2e` (4), `perf`, `vim`, `evals-mock`, `prune-caches` |
 | Security (`security.yml`) | push to `main`, pull requests, merge queue, weekly, manual | `gitleaks`, `codeql` (JS/TS + Actions), `dependency-review` (PRs) |
-| macOS app (`macos.yml`) | push to `main` and pull requests touching the app, the daemon, the sync service, what they bundle or the vim vectors; manual (inputs `release`, `thorough`) | `packages` (`app`, `editor`, `others`), `integration`, `ios`, `release` (main or `release`) |
+| macOS app (`macos.yml`) | push to `main` and pull requests touching the apps, the daemon, the sync service, what they bundle or the vim vectors; manual (inputs `release`, `thorough`) | `packages` (`app`, `editor`, `others`), `integration`, `iphone` (`ios.yml`), `release` (main or `release`), `prune-caches` |
+| iPhone app (`ios.yml`) | called by `macos.yml`; manual (input `device`) | `native` |
 | Linux bundle (`linux-bundle.yml`) | push to `main` and pull requests touching `deploy/linux`, the daemon, the sync service, the web app or what they bundle; manual | `bundle`, `setup` |
 | Evals (live) (`evals.yml`) | weekly, manual | `gate`, `live` |
 | Dependabot (`dependabot.yml`) | weekly | npm and GitHub Actions update PRs |
@@ -71,6 +72,10 @@ depends on (the `transit` task), the lockfile entries it uses, the declared env 
   Chromium when their task will replay.
 - A branch reads its own caches and `main`'s, never another branch's, so a pull request can't feed
   results to `main`.
+- Each run saves new turbo entries, so the last job (`prune-caches`, with `actions: write`)
+  deletes the older ones of each job on the same branch. The repository's cache space is limited,
+  and superseded entries would otherwise evict the ones other branches restore from. `macos.yml`
+  does the same for the Swift build caches.
 
 Locally the same cache lives in the main checkout's `.turbo/cache` (worktrees share it): a second
 `pnpm check` replays whatever didn't change. `pnpm test:changed` runs only the tests that import a
@@ -147,8 +152,9 @@ job selects the newest non-beta Xcode, and they all start at once:
 | `Swift packages (editor)` | `test.sh DailyDoListEditor`: its replay of every vim vector through the real editor is the longest test |
 | `Swift packages (others)` | `test.sh` for the other packages, then a smoke test of the debug `ddl-computer` |
 | `Integration tests and Swift format` | strict swift-format, then `test.sh integration` against the real daemon and sync service |
-| `Shared packages build for iOS` | builds the Foundation-only packages the iPhone app will reuse |
+| `iphone / native` | `ios.yml`: the iPhone app's unit, UIKit and real-input UI tests in a simulator (`apps/mobile/scripts/test.sh`), which also compiles the shared packages for iOS; on `main` or with `release`, first the unsigned build for a physical iPhone |
 | `Release app (bundled daemon)` | on `main`, or a manual run with `release`: the release app with the bundled daemon, a smoke test of its `ddl-computer`, and the zipped app as the `daily-do-list-macos` artifact (14 days; ad hoc signed, not notarized) |
+| `Prune superseded build caches` | deletes this branch's older Swift build caches, keeping the newest of each job |
 
 Dispatch with `-f release=true` to build the release app on a branch, `-f thorough=true` for the
 full iteration counts (`DDL_TEST_THOROUGH=1`, always on `main`). The package jobs need only Node
@@ -162,7 +168,10 @@ also when tests failed. A checkout gives every file a new modification time, whi
 Swift driver rebuild everything, so `apps/macos/scripts/ci-mtimes.mjs` records each tracked file's
 blob and time next to the build and, after a restore, gives unchanged files their recorded time
 back. Changed and new files keep the current time, so they and their dependents always rebuild: a
-cache can make a run faster, never skip a rebuild.
+cache can make a run faster, never skip a rebuild. The iPhone job caches its Xcode DerivedData the
+same way, keyed by `apps/mobile` and `apps/macos/Packages` (`ci-mtimes.mjs` takes those paths),
+without the per-run logs and result bundles. Its command-line builds skip the index store and code
+coverage, which nothing reads; a failing run uploads its result bundle.
 
 ```sh
 node scripts/lint.mjs --all --only swift   # or pnpm lint:fix to format

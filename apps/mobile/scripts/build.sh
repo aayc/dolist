@@ -13,4 +13,5 @@ case "${DDL_IOS_DESTINATION:-generic/platform=iOS Simulator}" in
 esac
 exec xcodebuild build -quiet -project "$ROOT/DailyDoList.xcodeproj" -scheme DailyDoList \
   -destination "${DDL_IOS_DESTINATION:-generic/platform=iOS Simulator}" \
-  -derivedDataPath "$ROOT/.build/DerivedData" CODE_SIGNING_ALLOWED="$SIGNING" CODE_SIGN_IDENTITY=- "$@"
+  -derivedDataPath "$ROOT/.build/DerivedData" CODE_SIGNING_ALLOWED="$SIGNING" CODE_SIGN_IDENTITY=- \
+  COMPILER_INDEX_STORE_ENABLE=NO "$@"

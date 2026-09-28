@@ -15,7 +15,7 @@ Why every client can share one backend:
   only through its `DaemonClient` with an explicit base URL and credential; `DailyDoListModels`
   mirrors the schemas in Swift and decodes the contract's fixtures, so drift fails CI, and
   `DailyDoListClient` implements the same client over REST and WebSocket. Both Swift packages are
-  Foundation-only and build for iOS.
+  Foundation-only; the iPhone app links them.
 - **Domain logic is pure and pinned.** `@ddl/core` has no runtime dependencies and no Node/DOM
   APIs; its Swift port (`DailyDoListDomain`) replays vectors generated from it, and vim mode on
   every surface replays the same recorded behavior vectors (`packages/editor/test/vim`).

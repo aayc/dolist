@@ -17,7 +17,9 @@ sys.exit("No iPhone simulator is installed")
 ')"
   DDL_IOS_DESTINATION="platform=iOS Simulator,id=$DEVICE"
 fi
+# No index store: only Xcode's editor reads it, from its own DerivedData.
 exec xcodebuild test -quiet -project "$ROOT/DailyDoList.xcodeproj" -scheme DailyDoList \
   -destination "${DDL_IOS_DESTINATION}" \
   -derivedDataPath "$ROOT/.build/DerivedData" \
-  -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- "$@"
+  -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- \
+  COMPILER_INDEX_STORE_ENABLE=NO "$@"

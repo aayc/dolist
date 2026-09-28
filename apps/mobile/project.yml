@@ -113,7 +113,6 @@ schemes:
       targets:
         DailyDoList: all
     test:
-      gatherCoverageData: true
       targets:
         - DailyDoListTests
         - DailyDoListUITests

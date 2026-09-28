@@ -424,9 +424,9 @@ A native SwiftUI/AppKit client of the daemon; details in `apps/macos/README.md`.
   `ddl-computer`'s protected targets and protocol, the editor's data safety, the perf budgets and
   regression tests of real bugs. See "Testing" in `apps/macos/README.md`.
 - **Conventions:** every package builds and tests on its own. Models, Client, Domain, Vim and
-  `DailyDoListDrawingModel` (the drawing package's model library) stay Foundation-only (they also
-  build for iOS). Use small files with doc comments. Anything touching
-  processes, the network, files or time goes behind a protocol so tests use fakes (see
+  `DailyDoListDrawingModel` (the drawing package's model library) stay Foundation-only; the
+  iPhone app's CI build compiles all but Vim for iOS. Use small files with doc comments. Anything
+  touching processes, the network, files or time goes behind a protocol so tests use fakes (see
   `DaemonSupervisorDependencies`). No third-party Swift dependencies so far. swift-format
   (`.swift-format`: 2 spaces, width 100) formats and lints every Swift file: `pnpm lint:fix`.
 - **Vim:** `DailyDoListVim` ports vim.js and its CodeMirror 6 adapter file by file, keeping their
@@ -478,9 +478,10 @@ A native SwiftUI/AppKit client of the daemon; details in `apps/macos/README.md`.
 - **CI:** `.github/workflows/macos.yml`, parallel jobs that each restore their SwiftPM build
   directory from a cache (`scripts/ci-mtimes.mjs` keeps unchanged sources' times so only changes
   rebuild): package tests in three groups (the app, the editor, the other packages with a smoke
-  test of `ddl-computer`), integration tests with the swift-format check, an iOS build of the
-  Foundation-only packages, and on main (or a manual run with `release`) the release app with
-  the bundled daemon, its `ddl-computer` smoke test and the zipped artifact (`docs/CI.md`).
+  test of `ddl-computer`), integration tests with the swift-format check, the iPhone app
+  (`ios.yml`, its cached DerivedData and simulator tests), and on main (or a manual run with
+  `release`) the release app with the bundled daemon, its `ddl-computer` smoke test and the zipped
+  artifact; a last job deletes the build caches the run superseded (`docs/CI.md`).
 
 ## Commits & PRs
 

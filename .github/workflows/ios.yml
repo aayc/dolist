@@ -1,8 +1,20 @@
 name: iPhone app
 
+# The native iPhone app (apps/mobile): its unit, UIKit and real-input UI tests in a simulator. The
+# build directory (DerivedData) is cached like the macOS jobs' SwiftPM builds, so a run recompiles
+# only what changed. The unsigned build for a physical iPhone runs on main or with `device`.
 on:
   workflow_call:
+    inputs:
+      device:
+        type: boolean
+        default: false
   workflow_dispatch:
+    inputs:
+      device:
+        description: Also build for a physical iPhone without signing (always on main)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -15,25 +27,68 @@ jobs:
   native:
     runs-on: macos-latest
     timeout-minutes: 30
+    env:
+      # The iPhone project's sources: the app and the shared packages it links.
+      SOURCES: apps/mobile apps/macos/Packages
+      DERIVED_DATA: apps/mobile/.build/DerivedData
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # Node for the cache's mtime script.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
       - name: Select Xcode
+        id: xcode
         run: apps/macos/scripts/ci-select-xcode.sh
       - name: Install pinned XcodeGen
         run: apps/mobile/scripts/install-xcodegen.sh
+
+      - name: Cache key
+        id: key
+        run: |
+          # shellcheck disable=SC2086
+          echo "sources=$(git ls-files -s -- $SOURCES | git hash-object --stdin)" >> "$GITHUB_OUTPUT"
+      - name: Restore the build directory
+        id: cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.DERIVED_DATA }}
+          key: iphone-${{ steps.xcode.outputs.key }}-${{ steps.key.outputs.sources }}
+          restore-keys: iphone-${{ steps.xcode.outputs.key }}-
+      - name: Keep unchanged sources' times
+        run: |
+          # shellcheck disable=SC2086
+          node apps/macos/scripts/ci-mtimes.mjs restore "$DERIVED_DATA" $SOURCES
+
       - name: Build for a physical iPhone without signing
+        if: github.ref == 'refs/heads/main' || inputs.device
         env:
           DDL_IOS_DESTINATION: generic/platform=iOS
         run: apps/mobile/scripts/build.sh
       - name: Simulator input and UI tests
         run: apps/mobile/scripts/test.sh
       - name: Test evidence
-        if: ${{ !cancelled() }}
+        if: ${{ failure() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: iphone-test-results
-          path: apps/mobile/.build/DerivedData/Logs/Test/*.xcresult
+          path: ${{ env.DERIVED_DATA }}/Logs/Test/*.xcresult
           if-no-files-found: warn
           retention-days: 14
+
+      - name: Record the sources' times
+        if: ${{ !cancelled() && steps.cache.outputs.cache-hit != 'true' }}
+        run: |
+          # Result bundles and logs are per run; keep them out of the cache.
+          rm -rf "$DERIVED_DATA/Logs"
+          # shellcheck disable=SC2086
+          node apps/macos/scripts/ci-mtimes.mjs save "$DERIVED_DATA" $SOURCES
+      - name: Save the build directory
+        # Also after failing tests: the build itself is reusable.
+        if: ${{ !cancelled() && steps.cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.DERIVED_DATA }}
+          key: iphone-${{ steps.xcode.outputs.key }}-${{ steps.key.outputs.sources }}
