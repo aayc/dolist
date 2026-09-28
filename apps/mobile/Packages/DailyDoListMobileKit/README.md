@@ -19,8 +19,9 @@ An interrupted checkpoint can leave an unreferenced markdown file; reopening use
 committed references. Failed writes, invalid UTF-8, hash mismatches, unreadable protected files,
 corrupt databases and unknown schema versions throw. They never produce empty writable notes or
 rebuild over the damaged data. Checkpoints currently remain available until explicit future cache
-management; there is no eviction of dirty content or merge bases. iOS files use protection until
-first unlock. Tokens are not stored here.
+management; there is no eviction of dirty content or merge bases. iOS files use the app's
+[storage protection](../DailyDoListMobileIntegration/PROTECTION.md) policy; an app-owned file that
+no repository owns uses `MobileProtectedFile`. Tokens are not stored here.
 
 ## Reconciliation
 
