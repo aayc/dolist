@@ -42,6 +42,12 @@ jobs:
       - name: Select Xcode
         id: xcode
         run: apps/macos/scripts/ci-select-xcode.sh
+      - name: Boot a simulator
+        # In the background: a fresh runner's first boot takes minutes, overlapping the build.
+        run: |
+          id="$(apps/mobile/scripts/simulator-id.sh)"
+          echo "DDL_IOS_DESTINATION=platform=iOS Simulator,id=$id" >> "$GITHUB_ENV"
+          nohup xcrun simctl boot "$id" > "$RUNNER_TEMP/simulator-boot.log" 2>&1 &
       - name: Install pinned XcodeGen
         run: apps/mobile/scripts/install-xcodegen.sh
 
@@ -67,8 +73,18 @@ jobs:
         env:
           DDL_IOS_DESTINATION: generic/platform=iOS
         run: apps/mobile/scripts/build.sh
+      - name: Build for testing
+        env:
+          DDL_BUILD_TIMING: "1"
+        run: |
+          log="$RUNNER_TEMP/build.log"
+          if ! apps/mobile/scripts/test.sh build-for-testing > "$log" 2>&1; then
+            grep -E 'error:|BUILD FAILED' "$log" | head -100
+            exit 1
+          fi
+          sed -n '/Build Timing Summary/,$p' "$log" | head -40
       - name: Simulator input and UI tests
-        run: apps/mobile/scripts/test.sh
+        run: apps/mobile/scripts/test.sh test-without-building
       - name: Test evidence
         if: ${{ failure() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

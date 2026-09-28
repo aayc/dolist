@@ -4,15 +4,7 @@ set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 : "${DEVELOPER_DIR:=/Applications/Xcode.app/Contents/Developer}"
 export DEVELOPER_DIR
-DEVICE="${DDL_IOS_SIMULATOR_ID:-$(xcrun simctl list devices available --json | python3 -c '
-import json,sys
-for devices in json.load(sys.stdin)["devices"].values():
-    for device in devices:
-        if device["name"].startswith("iPhone"):
-            print(device["udid"])
-            sys.exit(0)
-sys.exit("No iPhone simulator is installed")
-')}"
+DEVICE="${DDL_IOS_SIMULATOR_ID:-$("$ROOT/scripts/simulator-id.sh")}"
 "$ROOT/scripts/build.sh"
 STATE="$(xcrun simctl list devices available --json | python3 -c '
 import json,sys
