@@ -76,6 +76,8 @@ public actor FileConnectionProfileStore: ConnectionProfileStore {
   }
 
   private func read() throws -> Document {
+    let access = try MobileStorageProtection.access(at: file)
+    defer { withExtendedLifetime(access) {} }
     let data: Data
     do {
       data = try Data(contentsOf: file)
@@ -91,15 +93,12 @@ public actor FileConnectionProfileStore: ConnectionProfileStore {
   }
 
   private func write(_ document: Document) throws {
-    try FileManager.default.createDirectory(
-      at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+    let protection = try MobileStorageProtection.access(at: file)
+    defer { withExtendedLifetime(protection) {} }
+    try MobileStorageProtection.createDirectory(
+      file.deletingLastPathComponent(), mode: protection.mode)
     let data = try JSONEncoder().encode(document)
-    #if os(iOS)
-      try data.write(
-        to: file, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
-    #else
-      try data.write(to: file, options: .atomic)
-    #endif
+    try data.write(to: file, options: protection.mode.writingOptions)
     let handle = try FileHandle(forWritingTo: file)
     defer { try? handle.close() }
     try handle.synchronize()
