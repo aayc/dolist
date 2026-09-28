@@ -7,6 +7,49 @@ real simulator journeys. It is not finished or fully accepted.** Confirmed defec
 work, and a large computer-use acceptance matrix remain. Continue from the existing implementation;
 do not restart it or replace it with a prototype.
 
+## 0. Update: every section 6 stream integrated (2026-09-27, evening)
+
+A second agent continued from this document. Sections 1–12 below are the original snapshot;
+where they disagree, this section wins. Still no iPhone Vim of any kind.
+
+- **Integrated on `codex/iphone-app`** (tip `eba709e` plus documentation): bounded search
+  (`586e150` only, as `b1432b8`), strict storage protection and its app lifecycle (6A), drawing
+  import safety and the protected shape library (6D), recovery-export staging and retirement
+  ordering (6E), and the lead's download, keyboard and editor fixes (6C, 6F).
+- **6A:** protection is created before any store, and startup and cold intents wait for it.
+  A live change saves all work or refuses; it awaits background work, releases every
+  workspace, requires zero open handles or shows a retry state, then recreates and reconnects.
+  App-owned files use `MobileProtectedFile` (see `PROTECTION.md`).
+- **6C:** note and drawing repositories run one network pass at a time (`RepositoryPasses`).
+  A refresh no longer returns a cached copy as fresh, and a sync no longer drops pending edits
+  while another pass runs. That second bug was not in the list above. A resumed download
+  publishes its new request id before reading. Downloaded pinned files whose host version
+  changed are queued again. Launch and tree refreshes list documents from metadata.
+- **6D:** photo and file loads are bound to their request, and imports are checked against the
+  daemon's exact 5 MiB write body. The library moved from UserDefaults to a protected file,
+  and the old copy is removed only after the new one reads back.
+- **6E:** exports stage in locked, app-owned containers that are cleaned after cancel,
+  verification or restart. A retired profile is removed only as the last step.
+- **6F:** hardware Tab/Shift-Tab indent and outdent. Hidden note editors are released once saved.
+  Relative wikilinks were reviewed and left unchanged: the phone matches web and Mac for
+  `[[Name]]`, but its same-folder exact-path rule for `[[Name.md]]` (shared with the backlink
+  index) differs from them. Unifying them changes which note existing links open on every
+  client, so it waits for the user's decision.
+- **Verification:** 228/228 native tests, 133 MobileKit, the unsigned device build and
+  `pnpm check` pass; the CI run on `eba709e` passed. Also fixed a desktop-only Vim engine crash
+  that failed the Mac app's CI (timers read freed objects), and a noisy Vim p99 test.
+- **CI:** the iPhone job caches its DerivedData, skips coverage and the index store, builds for
+  a device only on `main`, and boots the simulator during the build. A branch skips iPhone
+  sources that already passed. Superseded caches are pruned (the repository was over its
+  10 GB limit), the redundant iOS package build is gone, and one redundant UI test is dropped.
+  The iPhone job went from 14 to about 9 minutes, most of which is the simulator's first boot,
+  and to about one minute when its sources are unchanged. See `docs/CI.md`.
+- **Not done:** computer-use acceptance of these changes and the section 9 matrix. The Cursor
+  computer-use helper needs macOS Accessibility and Screen Recording permission, which the
+  user must grant. The QA simulator runs this tip over its old data (protection migration
+  included). Its content fixture is reseeded, with two list lines added for the Tab check.
+  Physical-device checks (section 11) are unchanged.
+
 ## 1. User intent and transfer boundary
 
 The user originally requested a plan, then explicitly authorized complete native iPhone
@@ -243,7 +286,7 @@ pitfall, not evidence that source pasting through the app has been validated.
 
 ## 6. Confirmed unfinished work and problems
 
-### A. Integrate strict storage protection and prove the lifecycle
+### A. Integrate strict storage protection and prove the lifecycle — done (section 0)
 
 `codex/iphone-protection`, commit **`22d1f60`**, is pushed but **not integrated** into the root app.
 It implements durable pending/committed protection policy, Keychain accessibility migration,
@@ -269,7 +312,7 @@ The stream passed 123 MobileKit tests, 18 Integration tests, and 22 native tests
 executions. Native Keychain class migration was verified. iOS Simulator omits `NSFileProtectionKey`,
 so actual file-protection class and lock-encryption assertions remain physical-device checks.
 
-### B. Bound offline search and backlinks before loading content
+### B. Bound offline search and backlinks before loading content — done (section 0)
 
 At `79e928f`, callers use `repository.notes()` before enforcing their result/byte limits. That
 eagerly materializes all checkpoint content and defeats the intended large-vault memory bound.
@@ -279,7 +322,7 @@ The new design uses metadata-only listings plus incremental bounded working-text
 file length before allocation and keeping dirty local content ahead of disposable cached content.
 Search/backlinks must explicitly disclose incomplete coverage. Root must compose and retest it.
 
-### C. Fix remaining download races and freshness
+### C. Fix remaining download races and freshness — done (section 0)
 
 Three specific issues still need resolution:
 
@@ -297,7 +340,7 @@ Three specific issues still need resolution:
 A previous defect where explicit retries skipped already cached notes was fixed. That fix does
 not resolve the concurrent synchronization case above.
 
-### D. Make drawing imports safe under races and upload limits
+### D. Make drawing imports safe under races and upload limits — done (section 0)
 
 The drawing import stream is unfinished/unintegrated:
 
@@ -316,7 +359,7 @@ The planned app hook is `controller.importContext`, supplied by `DrawingSession`
 drawing document and base version. Scene-only validation cannot account for preserved Markdown
 frontmatter/sections. Confirm the stream's final API before wiring it.
 
-### E. Finish recovery/Forget cleanup
+### E. Finish recovery/Forget cleanup — done (section 0)
 
 At `79e928f`, interrupted retirement is recognized and resumed, and the notification badge is
 cleared. Two remaining concrete gaps were found:
@@ -332,7 +375,7 @@ cleared. Two remaining concrete gaps were found:
 An export-cleanup stream was preparing this work when transfer was requested; see section 7.
 The export proof/revision checks must remain intact. Do not reduce Forget to an unconditional delete.
 
-### F. Keyboard, editor retention and remaining parity review
+### F. Keyboard, editor retention and remaining parity review — done except CUA (section 0)
 
 - Physical Tab/Shift-Tab are not yet routed through the shared indent/outdent commands. Touch/menu
   indentation works. Add native handlers that respect IME composition and read-only state.
@@ -345,7 +388,7 @@ The export proof/revision checks must remain intact. Do not reduce Forget to an 
 - Living-list highlights/header and link preview sheets have implementation/unit coverage, but
   their full live CUA interactions have not been completed.
 
-## 7. Work outside the integrated branch
+## 7. Work outside the integrated branch — all integrated (section 0)
 
 The following is a snapshot of parallel work, not permission to blindly merge whole branches.
 Subagents may have snapshot commits containing copied root files. Only integrate their actual

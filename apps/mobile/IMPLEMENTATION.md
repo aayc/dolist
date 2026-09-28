@@ -2,8 +2,9 @@
 
 **Transfer boundary (2026-09-27):** the user requested a complete handoff for another agent.
 Read `TRANSFER.md` for the current snapshot, confirmed defects, unintegrated stream commits and
-remaining acceptance. Implementation in this task has stopped; the continuation heartbeat is paused.
-Historical entries below retain their original evidence and may describe work later completed.
+remaining acceptance. The original task's heartbeat stays paused. A second agent has since
+integrated every section 6 stream and fixed its defects: `TRANSFER.md` section 0 is the current
+state. Historical entries below retain their original evidence and may describe work later completed.
 
 ## Durable user instruction (2026-09-27)
 
