@@ -35,7 +35,14 @@ public actor WorkspaceRecovery {
     try store.discardLocalNote(path: path, expectedRevision: expectedRevision)
   }
 
-  public func export(to parent: URL) throws -> RecoveryExportResult {
+  /// Exports only into an app-owned stage, never a folder the caller names.
+  public func export(into stage: RecoveryExportStage) throws -> RecoveryExportResult {
+    guard stage.scope == scope else { throw WorkspaceRepositoryError.workspaceMismatch }
+    guard stage.leased else { throw RecoveryStagingError.released }
+    return try export(to: stage.container)
+  }
+
+  func export(to parent: URL) throws -> RecoveryExportResult {
     let access = try checkpoints.beginAccess()
     defer { access?.release() }
     let internalPath = checkpointDirectory.deletingLastPathComponent().resolvingSymlinksInPath()

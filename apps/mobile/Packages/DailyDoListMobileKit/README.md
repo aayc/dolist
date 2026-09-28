@@ -199,7 +199,7 @@ forcing either silent overwrite or an unrecoverable blocked state.
 ## Recovery export and explicit forget
 
 `WorkspaceRecovery.summary()` counts unsynced/review/recovery notes, unsent composers, unresolved
-captures/structural actions and unknown protected records. `export(to:)` takes a consistent index
+captures/structural actions and unknown protected records. `export(into:)` takes a consistent index
 snapshot and writes working markdown, bases, attempted write bodies, recovery copies, composer
 text, pending captures and structural originals. A versioned JSON manifest retains original
 paths, hashes, revisions, routing and operation metadata. Only known content is exported; unknown
@@ -212,6 +212,17 @@ Each file is synchronized and the manifest is written last before the staging di
 published. Failure removes staging and leaves the source untouched. Export is user-invoked,
 contains no credential store or tokens, and may not target the private workspace directory.
 The app owns security-scoped destination access and share/document-picker presentation.
+
+Exports go only into a `RecoveryExportStage` from `RecoveryExportStaging`, an app-owned root
+outside the managed storage root; callers never name a folder. Each stage is a generated
+`<profile>.<export>` container, created with the injected file protection class (default
+`.complete`) and holding an exclusive `flock` lease until it is removed or its process ends. A
+root lock serializes creation, removal and cleanup across instances and processes.
+`RecoveryExportSession` removes the staged originals when the picker is cancelled, after the Files
+copy is verified (verification reads only that copy, so the proof survives), and when a new export
+replaces it. `removeAbandoned()` at startup, or `removeAbandoned(for:)` during retirement, removes
+only unleased containers it created: symlinks, other owners and unknown names are left alone and
+reported, and a failed removal throws `cleanupFailed` after trying the rest so it can be retried.
 
 `forget()` refuses protected local work. After offering sync or export, only an explicit discard
 choice may call `forget(discardUnsyncedWork: true)`. The app first fences/cancels editors and

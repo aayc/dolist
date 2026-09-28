@@ -12,6 +12,7 @@ final class PhoneAppModel {
   /// Nil only when the saved protection policy cannot be read; storage then stays closed.
   let protection: PhoneStorageProtectionController?
   let protectionSetupError: String?
+  let exportStaging: RecoveryExportStaging
   private(set) var workspace: PhoneWorkspace?
   private(set) var restored = false
   var error: String?
@@ -43,6 +44,7 @@ final class PhoneAppModel {
     rootDirectory: URL? = nil, defaults: UserDefaults = .standard,
     credentials: KeychainConnectionCredentials = KeychainConnectionCredentials(),
     workspaceFactory: (@MainActor (ConnectionProfile) async throws -> PhoneWorkspace)? = nil,
+    exportStaging: RecoveryExportStaging = .app,
     installIntegrations: Bool = true
   ) {
     root =
@@ -52,6 +54,7 @@ final class PhoneAppModel {
     self.defaults = defaults
     self.workspaceFactory = workspaceFactory
     self.credentials = credentials
+    self.exportStaging = exportStaging
     // Registers the root as blocked before any profile or workspace store can open under it.
     do {
       let legacy = defaults.data(forKey: "phoneNotifications").flatMap {
@@ -125,6 +128,9 @@ final class PhoneAppModel {
       do { _ = try await finishRetiredConnection(profile) } catch {
         self.error = error.localizedDescription
       }
+    }
+    do { try await exportStaging.removeAbandoned() } catch {
+      self.error = error.localizedDescription
     }
     if let saved = defaults.string(forKey: "selectedConnection"),
       let profile = connection.profiles.first(where: { $0.id.uuidString == saved })

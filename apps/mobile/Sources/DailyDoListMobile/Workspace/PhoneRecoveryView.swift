@@ -5,9 +5,11 @@ import UIKit
 
 struct PhoneRecoveryView: View {
   let workspace: PhoneWorkspace
+  @Environment(\.recoveryExportStaging) private var staging
   @State private var notes: [LocalNote] = []
   @State private var drawings: [LocalDrawing] = []
   @State private var exporting = false
+  @State private var exports: RecoveryExportSession?
   @State private var exported: RecoveryExportResult?
   @State private var showExport = false
   @State private var failure: String?
@@ -66,11 +68,14 @@ struct PhoneRecoveryView: View {
         Button("Export local recovery files", systemImage: "square.and.arrow.up") {
           exporting = true
           verified = false
+          failure = nil
           Task {
             do {
               try await workspace.prepareRecoveryExport()
-              exported = try await workspace.recovery.export(
-                to: FileManager.default.temporaryDirectory)
+              let session =
+                exports ?? RecoveryExportSession(recovery: workspace.recovery, staging: staging)
+              exports = session
+              exported = try await session.export()
               showExport = true
             } catch { failure = error.localizedDescription }
             exporting = false
@@ -101,16 +106,25 @@ struct PhoneRecoveryView: View {
       await workspace.loadCaptures()
       await workspace.agent?.refreshPendingMutations()
     }
+    .onDisappear {
+      guard !showExport, let exports else { return }
+      // A failed removal releases its lease with the session; startup cleanup retries it.
+      Task { try? await exports.discard() }
+    }
     .sheet(isPresented: $showExport) {
       if let exported {
         WorkspaceExportPicker(url: exported.directory) { destination in
           showExport = false
-          guard let destination else { return }
           Task {
             do {
-              _ = try await workspace.recovery.verifyExport(exported, at: destination)
-              verified = true
+              if let destination {
+                _ = try await workspace.recovery.verifyExport(exported, at: destination)
+                verified = true
+              }
             } catch { failure = error.localizedDescription }
+            do { try await exports?.discard() } catch {
+              failure = failure ?? error.localizedDescription
+            }
           }
         }
       }
