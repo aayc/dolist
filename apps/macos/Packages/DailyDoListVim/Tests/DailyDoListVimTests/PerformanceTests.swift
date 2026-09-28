@@ -18,7 +18,9 @@ struct PerformanceTests {
       : "- [ ] Task \(i): follow up with the vendor about item \(i % 97) today"
   }.joined(separator: "\n")
 
-  /// The 99th percentile of `samples` key presses, in milliseconds, after a warm-up.
+  /// The 99th percentile of `samples` key presses, in milliseconds, after a warm-up: the best of
+  /// three rounds. A shared runner's busy moments only add time, and on the same code one round's
+  /// p99 varied sixfold between CI runs; a real regression shows in every round.
   private func p99(
     _ samples: Int, setUp: (VimSession, VimTextBuffer) -> Void = { _, _ in }, _ keys: [String]
   ) -> Double {
@@ -28,18 +30,19 @@ struct PerformanceTests {
     buffer.setCursor(line: 5_000, ch: 4)
     setUp(session, buffer)
     let clock = ContinuousClock()
-    var durations: [Duration] = []
-    durations.reserveCapacity(samples)
-    for i in 0..<(samples + 20) {
-      let elapsed = clock.measure {
+    func press() -> Duration {
+      clock.measure {
         for key in keys { session.handleKey(key) }
         buffer.measure()
       }
-      if i >= 20 { durations.append(elapsed) }
     }
-    durations.sort()
-    let d = durations[Int(Double(durations.count - 1) * 0.99)].components
-    return Double(d.seconds) * 1000 + Double(d.attoseconds) / 1e15
+    for _ in 0..<20 { _ = press() }
+    let rounds = (0..<3).map { _ in
+      let durations = (0..<samples).map { _ in press() }.sorted()
+      let d = durations[Int(Double(durations.count - 1) * 0.99)].components
+      return Double(d.seconds) * 1000 + Double(d.attoseconds) / 1e15
+    }
+    return rounds.min() ?? .infinity
   }
 
   private func check(_ name: String, _ milliseconds: Double) {
