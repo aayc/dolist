@@ -5,30 +5,51 @@ import Foundation
 public struct CachedSearchResult: Sendable {
   public let hits: [SearchHit]
   public let downloadedNotes: Int
+  public let searchedNotes: Int
+  public let isComplete: Bool
 }
 
 extension WorkspaceRepository {
   /// Runs on the repository actor after the UI's debounce. Coverage is explicit: unavailable
   /// files never become false negative claims about the whole vault.
-  public func search(_ query: String, limit: Int = 100) throws -> CachedSearchResult {
-    let documents = try notes()
+  public func search(
+    _ query: String, limit: Int = 100, scanLimits: CachedNoteScanLimits = .init()
+  ) throws -> CachedSearchResult {
     let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !query.isEmpty else {
-      return CachedSearchResult(hits: [], downloadedNotes: documents.count)
-    }
     let maximum = min(500, max(0, limit))
-    var hits = documents.filter { $0.path.localizedCaseInsensitiveContains(query) }.prefix(maximum)
-      .map {
-        SearchHit(path: $0.path, kind: .name, line: 0, preview: VaultPath.basename($0.path))
-      }
-    for note in documents where hits.count < maximum {
-      try Task.checkCancellation()
-      for (line, text) in note.content.components(separatedBy: "\n").enumerated()
-      where hits.count < maximum && text.localizedCaseInsensitiveContains(query) {
-        hits.append(
-          SearchHit(path: note.path, kind: .content, line: line, preview: String(text.prefix(400))))
-      }
+    guard !query.isEmpty, maximum > 0 else {
+      let count = try index.documents().filter { !WorkspaceDocumentPath.isDrawing($0.path) }.count
+      return CachedSearchResult(
+        hits: [], downloadedNotes: count, searchedNotes: 0, isComplete: count == 0)
     }
-    return CachedSearchResult(hits: hits, downloadedNotes: documents.count)
+    var hits: [SearchHit] = []
+    let scan = try scanCachedNotes(limits: scanLimits) { metadata, content in
+      if metadata.path.localizedCaseInsensitiveContains(query) {
+        hits.append(
+          SearchHit(
+            path: metadata.path, kind: .name, line: 0, preview: VaultPath.basename(metadata.path)))
+      }
+      if let content, hits.count < maximum {
+        // Visit line slices lazily, keeping the source's empty lines and zero-based positions.
+        var start = content.startIndex
+        var line = 0
+        while hits.count < maximum {
+          let end = content[start...].firstIndex(of: "\n") ?? content.endIndex
+          let text = content[start..<end]
+          if text.localizedCaseInsensitiveContains(query) {
+            hits.append(
+              SearchHit(
+                path: metadata.path, kind: .content, line: line, preview: String(text.prefix(400))))
+          }
+          guard end < content.endIndex else { break }
+          start = content.index(after: end)
+          line += 1
+        }
+      }
+      return hits.count < maximum
+    }
+    return CachedSearchResult(
+      hits: hits, downloadedNotes: scan.downloadedNotes,
+      searchedNotes: scan.scannedNotes, isComplete: scan.isComplete && hits.count < maximum)
   }
 }

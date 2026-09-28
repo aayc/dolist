@@ -91,6 +91,19 @@ both stores; no drawing-specific transport or unguarded write path is required.
 
 ## Workspace cache and composers
 
+`cachedDocumentMetadata()` returns path, sync state, host base version, local revision and
+acknowledged revision from SQLite without loading text. Download freshness checks and navigation
+must use it instead of `notes()`, which intentionally materializes full writable snapshots.
+`cachedNoteTexts(limits:excludingPaths:)` is a read-only, dirty-first scan for backlink previews.
+It reads only working checkpoints, checks their lengths before allocation, validates accepted
+bytes, and reports incomplete coverage when a file/count/aggregate-byte limit excludes content.
+Excluding live editors lets the caller reserve their bytes and use newer resident text instead.
+`search` uses the same bounded reader with lazy line slices; its default scan admits at most
+1,000 files, 1 MiB per file and 16 MiB total. Name matches remain available from metadata even
+when bodies cannot be scanned. `searchedNotes` and `isComplete` keep that limit visible to users.
+Injected wrappers around `MarkdownCheckpointStore` should forward its bounded `read` overload;
+the protocol fallback supports in-memory stores but reads their complete value before validating.
+
 `WorkspaceCache` stores typed settings, the vault tree and recent thread summaries. Callers retain
 the revision before fetching and pass it to `storeSettings`, `storeTree` or `storeRecentThreads`;
 stale responses fail their comparison rather than replacing a newer snapshot. Missing cache
