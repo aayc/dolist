@@ -1,3 +1,4 @@
+import DailyDoListMobileIntegration
 import DailyDoListMobileKit
 import SwiftUI
 
@@ -10,10 +11,24 @@ struct PhoneRootView: View {
 
   var body: some View {
     Group {
-      if let workspace = model.workspace {
+      // A protection change must see every workspace view go, including pushed settings pages.
+      if let workspace = model.workspace, model.protection?.busy != true {
         PhoneWorkspaceView(
           model: model, workspace: workspace, chooseHost: { choosingHost = true },
-          isRootCurrent: { !choosingHost && !pairing })
+          isRootCurrent: { !choosingHost && !pairing }
+        )
+        .id(ObjectIdentifier(workspace))
+      } else if showsStorageProtection {
+        NavigationStack {
+          Form {
+            if let protection = model.protection {
+              PhoneStorageProtectionSection(controller: protection)
+            } else {
+              Section("Stored data") { Text(model.protectionSetupError ?? "") }
+            }
+          }
+          .navigationTitle("Daily Do List")
+        }
       } else {
         NavigationStack {
           List {
@@ -64,6 +79,12 @@ struct PhoneRootView: View {
     } message: {
       Text(model.error ?? "")
     }
+  }
+
+  /// Cold preparation keeps the ordinary start screen; a live change or failure shows its state.
+  private var showsStorageProtection: Bool {
+    guard let protection = model.protection else { return true }
+    return protection.busy ? model.restored : !protection.ready && protection.error != nil
   }
 
   private var savedConnections: some View {

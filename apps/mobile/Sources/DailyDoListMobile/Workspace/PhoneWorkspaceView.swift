@@ -98,7 +98,9 @@ struct PhoneWorkspaceView: View {
           }
           Section("On this iPhone") {
             NavigationLink("Downloads and storage") { PhoneDownloadsView(workspace: workspace) }
-            NavigationLink("Notifications and Siri") { PhoneIntegrationSettingsView(model: model) }
+            NavigationLink("Privacy and notifications") {
+              PhoneIntegrationSettingsView(model: model)
+            }
             NavigationLink("Attachments") {
               PhoneAttachmentUploadsView(
                 online: workspace.online,

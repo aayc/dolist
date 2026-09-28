@@ -9,7 +9,11 @@ import UIKit
 final class PhoneAppModel {
   let connection: MobileConnection
   let pairing: PairingService
+  /// Nil only when the saved protection policy cannot be read; storage then stays closed.
+  let protection: PhoneStorageProtectionController?
+  let protectionSetupError: String?
   private(set) var workspace: PhoneWorkspace?
+  private(set) var restored = false
   var error: String?
   var notificationError: String?
   var notificationPreferences = PhoneNotificationPreferences()
@@ -20,18 +24,24 @@ final class PhoneAppModel {
   @ObservationIgnored var notificationCenter: SystemPhoneNotificationCenter?
   @ObservationIgnored var backgroundRefresh: PhoneBackgroundRefresh?
   @ObservationIgnored var notificationRefreshTask: Task<Void, Never>?
+  @ObservationIgnored var notificationReceipts: [UUID: Task<Void, Never>] = [:]
+  @ObservationIgnored var storageSuspended = false
+  @ObservationIgnored var storageDrainPause: @MainActor () async throws -> Void = {
+    try await Task.sleep(for: .milliseconds(50))
+  }
   @ObservationIgnored private let privacyShield = PhonePrivacyShield()
   @ObservationIgnored private let credentials: KeychainConnectionCredentials
   @ObservationIgnored private let root: URL
-  @ObservationIgnored private let defaults: UserDefaults
+  @ObservationIgnored let defaults: UserDefaults
   @ObservationIgnored private let workspaceFactory:
     (@MainActor (ConnectionProfile) async throws -> PhoneWorkspace)?
-  @ObservationIgnored private var selection: UInt64 = 0
+  @ObservationIgnored var selection: UInt64 = 0
   @ObservationIgnored private var started = false
-  @ObservationIgnored private var workspaces: [UUID: PhoneWorkspace] = [:]
+  @ObservationIgnored var workspaces: [UUID: PhoneWorkspace] = [:]
 
   init(
     rootDirectory: URL? = nil, defaults: UserDefaults = .standard,
+    credentials: KeychainConnectionCredentials = KeychainConnectionCredentials(),
     workspaceFactory: (@MainActor (ConnectionProfile) async throws -> PhoneWorkspace)? = nil,
     installIntegrations: Bool = true
   ) {
@@ -41,8 +51,24 @@ final class PhoneAppModel {
       .appendingPathComponent("DailyDoList", isDirectory: true)
     self.defaults = defaults
     self.workspaceFactory = workspaceFactory
+    self.credentials = credentials
+    // Registers the root as blocked before any profile or workspace store can open under it.
+    do {
+      let legacy = defaults.data(forKey: "phoneNotifications").flatMap {
+        try? JSONDecoder().decode(PhoneNotificationPreferences.self, from: $0)
+      }
+      let migration = try PhoneProtectionMigration(
+        rootDirectory: root, credentials: credentials,
+        initialMode: legacy?.requiresUnlockedStorage == true ? .whileUnlocked : .afterFirstUnlock)
+      protection = PhoneStorageProtectionController(
+        migration: migration, quiesce: {}, resume: {})
+      protectionSetupError = nil
+    } catch {
+      protection = nil
+      protectionSetupError =
+        (error as? MobileStorageProtectionError ?? .unsupportedState).localizedDescription
+    }
     let profiles = FileConnectionProfileStore(directory: root)
-    credentials = KeychainConnectionCredentials()
     connection = MobileConnection(profiles: profiles, credentials: credentials) {
       origin, token, workspace in
       ConnectionChannel.native(origin: origin, token: token, expectedWorkspaceID: workspace)
@@ -56,13 +82,15 @@ final class PhoneAppModel {
       guard let self, let client = client as? HTTPDaemonClient else { return }
       do {
         let workspace = try await self.workspace(for: profile)
-        guard self.connection.selected?.id == profile.id, self.connection.actionsEnabled else {
-          return
-        }
+        guard self.connection.selected?.id == profile.id, self.connection.actionsEnabled,
+          !self.storageClosed
+        else { return }
         self.workspace = workspace
         await workspace.connect(client, serverVersion: self.connection.health?.version ?? "")
         self.scheduleNotificationRefresh()
-      } catch { self.error = error.localizedDescription }
+      } catch {
+        if !self.storageClosed { self.error = error.localizedDescription }
+      }
     }
     connection.onInvalidated = { [weak self] profile in
       guard let id = profile?.id else { return }
@@ -76,12 +104,23 @@ final class PhoneAppModel {
     if installIntegrations {
       installPhoneIntegrations(profiles: profiles, credentials: credentials, rootDirectory: root)
     }
+    protection?.quiesce = { [weak self] in try await self?.quiesceStorage() }
+    protection?.resume = { [weak self] in await self?.resumeStorage() }
   }
 
   func start() async {
     guard !started else { return }
     started = true
+    // A failure leaves the controller's retry state; its resume finishes this restoration.
+    do { try await prepareStorage() } catch { return }
+    await restore()
+  }
+
+  func restore() async {
     await connection.loadProfiles()
+    // Unreadable (for example locked) profiles are not missing ones; the next activation retries.
+    if case .failed = connection.phase { return }
+    restored = true
     for profile in connection.profiles {
       do { _ = try await finishRetiredConnection(profile) } catch {
         self.error = error.localizedDescription
@@ -187,6 +226,7 @@ final class PhoneAppModel {
     appActive = active
     guard !active else {
       await connection.setActive(true)
+      if !restored, case .failed = connection.phase, protection?.ready == true { await restore() }
       scheduleNotificationRefresh()
       return
     }
@@ -200,11 +240,23 @@ final class PhoneAppModel {
     try? await backgroundRefresh?.schedule()
   }
 
+  /// Callers first checkpoint every workspace and await its work; this drops their stores.
+  func releaseWorkspaces() {
+    for workspace in workspaces.values {
+      workspace.offlineChannel?.close()
+      workspace.offlineChannel = nil
+    }
+    workspaces.removeAll()
+    workspace = nil
+  }
+
   private func workspace(for profile: ConnectionProfile) async throws -> PhoneWorkspace {
     if let existing = workspaces[profile.id] { return existing }
+    try requireOpenStorage()
     if let workspaceFactory {
       let created = try await workspaceFactory(profile)
       if let existing = workspaces[profile.id] { return existing }
+      try requireOpenStorage()
       workspaces[profile.id] = created
       return created
     }
@@ -225,6 +277,7 @@ final class PhoneAppModel {
       )
     }.value
     if let existing = workspaces[profile.id] { return existing }
+    try requireOpenStorage()
     let created = try PhoneWorkspace(
       rootDirectory: root, structural: structural, recovery: recovery,
       profile: profile, repository: repository, drawingRepository: drawings, cache: cache,

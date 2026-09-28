@@ -17,15 +17,28 @@ extension PhoneAppModel {
     let center = SystemPhoneNotificationCenter { [weak self] url in
       await self?.openIntegrationURL(url)
     }
+    let integrations = makeIntegrations(
+      profiles: profiles, credentials: credentials, rootDirectory: rootDirectory,
+      notificationCenter: center)
+    self.integrations = integrations
+    notificationCenter = center
+    PhoneIntentRuntime.shared.install(integrations) { [weak self] route in
+      await self?.openIntegrationRoute(route)
+    }
+    let refresh = PhoneBackgroundRefresh(
+      identifier: "app.dailydolist.iphone.refresh", integrations: integrations)
+    if refresh.register() { backgroundRefresh = refresh }
+  }
+
+  func makeIntegrations(
+    profiles: any ConnectionProfileStore, credentials: any ConnectionCredentials,
+    rootDirectory: URL, notificationCenter: any PhoneNotificationCenter
+  ) -> PhoneIntegrations {
     let workspaceRoot = rootDirectory.appendingPathComponent("workspaces")
-    let integrations = PhoneIntegrations(
+    return PhoneIntegrations(
       rootDirectory: workspaceRoot, profiles: profiles, credentials: credentials,
-      selectedProfile: {
-        await MainActor.run {
-          UserDefaults.standard.string(forKey: "selectedConnection").flatMap(UUID.init(uuidString:))
-        }
-      },
-      preferences: { [weak self] in await self?.notificationPreferences ?? .init() },
+      selectedProfile: { [weak self] in await self?.savedSelection },
+      preferences: { [weak self] in await self?.integrationPreferences ?? .init() },
       visibleDestination: { [weak self] in
         await MainActor.run {
           guard let self, self.appActive, let workspace = self.workspace,
@@ -35,18 +48,14 @@ extension PhoneAppModel {
             scope: workspace.repository.scope, threadID: self.visibleThreads.sorted().first,
             routineID: self.visibleRoutines.sorted().first)
         }
-      }, notificationCenter: center,
+      }, notificationCenter: notificationCenter,
       approvalCacheFactory: {
         try MobileInboxApprovalCache(rootDirectory: workspaceRoot, scope: $0)
+      },
+      prepareStorage: { [weak self] in
+        guard let self else { throw MobileStorageProtectionError.unavailable }
+        try await self.prepareStorage()
       })
-    self.integrations = integrations
-    notificationCenter = center
-    PhoneIntentRuntime.shared.install(integrations) { [weak self] route in
-      await self?.openIntegrationRoute(route)
-    }
-    let refresh = PhoneBackgroundRefresh(
-      identifier: "app.dailydolist.iphone.refresh", integrations: integrations)
-    if refresh.register() { backgroundRefresh = refresh }
   }
 
   func openIntegrationURL(_ url: URL) async {
@@ -103,10 +112,11 @@ extension PhoneAppModel {
     case .approvalUpsert: scheduleNotificationRefresh()
     case .routineNotification(let value):
       guard let scope = workspace?.repository.scope, let integrations else { return }
-      Task {
-        do { try await integrations.receive(value, scope: scope) } catch {
-          notificationError = error.localizedDescription
-        }
+      let id = UUID()
+      notificationReceipts[id] = Task {
+        defer { notificationReceipts[id] = nil }
+        do { try await integrations.receive(value, scope: scope) } catch is CancellationError {
+        } catch { notificationError = error.localizedDescription }
       }
     default: break
     }
