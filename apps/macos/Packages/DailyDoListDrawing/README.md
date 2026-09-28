@@ -415,7 +415,7 @@ keep separate requests, so a late callback from one never applies to the other's
 `MobileDrawingLibrary` persists through an injected `Storage`: `load` and `save` of one serialized
 `.excalidrawlib`, which `save` replaces atomically and durably. It reads on first use (the library
 screen, or the first change), not at launch. `Storage.memory()` keeps nothing on disk. The iPhone
-app injects one library backed by a file in its managed storage root (`PhoneDrawingLibraryFile`).
+app injects one library backed by a file in its managed storage root (`MobileProtectedFile`).
 Earlier versions kept the library in `UserDefaults` (`drawing.library.v1`); `LegacyStorage` moves
 it, removing the legacy bytes only after storage returns exactly those bytes after saving them.
 Any failure keeps them and shows their shapes (insertable and exportable, not changeable) with the

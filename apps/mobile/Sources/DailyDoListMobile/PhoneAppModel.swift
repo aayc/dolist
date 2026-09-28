@@ -73,8 +73,10 @@ final class PhoneAppModel {
       protectionSetupError =
         (error as? MobileStorageProtectionError ?? .unsupportedState).localizedDescription
     }
+    let libraryFile = MobileProtectedFile(
+      url: root.appendingPathComponent("drawing-library.excalidrawlib"))
     drawingLibrary = MobileDrawingLibrary(
-      storage: PhoneDrawingLibraryFile(rootDirectory: root).storage,
+      storage: .init(load: libraryFile.read, save: libraryFile.write),
       legacy: .userDefaults(defaults))
     let profiles = FileConnectionProfileStore(directory: root)
     connection = MobileConnection(profiles: profiles, credentials: credentials) {
