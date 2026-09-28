@@ -42,6 +42,7 @@ public final class PhoneStorageProtectionController {
     // Live migration is draining these callers; awaiting that same migration would deadlock.
     guard !busy || !requiresQuiescence else { throw MobileStorageProtectionError.busy }
     guard !ready else { return }
+    refreshAvailability()
     busy = true
     error = nil
     do {
@@ -62,6 +63,7 @@ public final class PhoneStorageProtectionController {
 
   public func change(to mode: MobileStorageProtectionMode) async {
     guard !busy else { return }
+    refreshAvailability()
     ready = false
     busy = true
     requiresQuiescence = true
@@ -85,6 +87,14 @@ public final class PhoneStorageProtectionController {
     } catch { await failed(error) }
   }
 
+  /// An application usually builds this controller before it finishes launching, when
+  /// `isProtectedDataAvailable` still reads false and no availability notification follows.
+  private func refreshAvailability() {
+    #if os(iOS)
+      availability.refresh()
+    #endif
+  }
+
   private func failed(_ failure: Error) async {
     state = await migration.snapshot()
     ready = await migration.isPrepared()
@@ -103,7 +113,7 @@ public final class PhoneStorageProtectionController {
     init(storage: MobileStorageProtection) {
       self.storage = storage
       super.init()
-      storage.setProtectedDataAvailable(UIApplication.shared.isProtectedDataAvailable)
+      refresh()
       NotificationCenter.default.addObserver(
         self, selector: #selector(unavailable),
         name: UIApplication.protectedDataWillBecomeUnavailableNotification, object: nil)
@@ -112,6 +122,9 @@ public final class PhoneStorageProtectionController {
         name: UIApplication.protectedDataDidBecomeAvailableNotification, object: nil)
     }
     deinit { NotificationCenter.default.removeObserver(self) }
+    func refresh() {
+      storage.setProtectedDataAvailable(UIApplication.shared.isProtectedDataAvailable)
+    }
     @objc private func unavailable() { storage.setProtectedDataAvailable(false) }
     @objc private func available() { storage.setProtectedDataAvailable(true) }
   }

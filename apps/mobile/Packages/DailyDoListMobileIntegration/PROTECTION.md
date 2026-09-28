@@ -45,10 +45,12 @@ opt-in. Both modes retain explicit local-device authentication for every App Int
    `!controller.permitsBackgroundRefresh` in the service's live preferences closure, including
    startup and transitions. Do not treat the old saved boolean as evidence of file protection; it
    only chooses `initialMode` when no policy file exists yet.
-6. `PhoneStorageProtectionController` observes protected-data availability. Existing SQLite handles
-   and checkpoint/profile access fail closed while strict storage is unavailable. The application
-   must still checkpoint before suspension and keep its existing app-switcher privacy shield.
-   A protected-data error must never be handled as a missing profile, empty note or revoked token.
+6. `PhoneStorageProtectionController` observes protected-data availability and reads it again
+   whenever it prepares or changes storage (the value is stale before launch finishes). Existing
+   SQLite handles and checkpoint/profile access fail closed while strict storage is unavailable.
+   The application must still checkpoint before suspension and keep its existing app-switcher
+   privacy shield. A protected-data error must never be handled as a missing profile, empty note
+   or revoked token.
 
 ## How the app composes it
 

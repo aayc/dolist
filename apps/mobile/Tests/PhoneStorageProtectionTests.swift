@@ -11,16 +11,19 @@ struct PhoneStorageProtectionTests {
   @Test func startupLoadsNothingUntilStoragePreparationSucceeds() async throws {
     let f = try await ProtectionFixture()
     defer { f.remove() }
+    let unexpected = f.root.appendingPathComponent("unexpected-link")
+    try FileManager.default.createSymbolicLink(
+      at: unexpected, withDestinationURL: f.root.appendingPathComponent("workspaces"))
     let model = f.model()
     let protection = try #require(model.protection)
-    protection.migration.storage.setProtectedDataAvailable(false)
 
     await model.start()
 
-    #expect(!protection.ready && protection.error != nil)
+    #expect(!protection.ready)
+    #expect(protection.error == MobileStorageProtectionError.invalidPath.localizedDescription)
     #expect(model.connection.phase == .idle && model.connection.profiles.isEmpty)
     #expect(f.constructions == 0)
-    protection.migration.storage.setProtectedDataAvailable(true)
+    try FileManager.default.removeItem(at: unexpected)
     await protection.retry()
     #expect(protection.ready)
     #expect(model.connection.profiles.map(\.id) == [f.profile.id])
