@@ -6,6 +6,8 @@ public struct CachedDocumentMetadata: Sendable {
   public let baseVersion: String?
   public let localRevision: Int64
   public let acknowledgedRevision: Int64
+  /// The split `notes()` and `DrawingRepository.drawings()` use.
+  public var isDrawing: Bool { WorkspaceDocumentPath.isDrawing(path) }
 
   init(_ record: NoteIndexRecord) {
     path = record.path
