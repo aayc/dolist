@@ -45,9 +45,10 @@ jobs:
         run: apps/macos/scripts/ci-select-xcode.sh
       - name: Cache key
         id: key
+        # Documentation isn't built: a docs-only change reuses the build and the pass.
         run: |
           # shellcheck disable=SC2086
-          echo "sources=$(git ls-files -s -- $SOURCES .github/workflows/ios.yml |
+          echo "sources=$(git ls-files -s -- $SOURCES .github/workflows/ios.yml ':!*.md' |
             git hash-object --stdin)" >> "$GITHUB_OUTPUT"
       - name: Passed already?
         # Like turbo in ci.yml: a branch skips sources that already passed on it or on main (the
