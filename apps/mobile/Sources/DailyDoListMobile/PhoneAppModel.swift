@@ -1,4 +1,5 @@
 import DailyDoListClient
+import DailyDoListMobileDrawing
 import DailyDoListMobileIntegration
 import DailyDoListMobileKit
 import Foundation
@@ -21,6 +22,7 @@ final class PhoneAppModel {
   var visibleThreads: Set<String> = []
   var visibleRoutines: Set<String> = []
   var appActive = true
+  @ObservationIgnored let drawingLibrary: MobileDrawingLibrary
   @ObservationIgnored var integrations: PhoneIntegrations?
   @ObservationIgnored var notificationCenter: SystemPhoneNotificationCenter?
   @ObservationIgnored var backgroundRefresh: PhoneBackgroundRefresh?
@@ -71,6 +73,9 @@ final class PhoneAppModel {
       protectionSetupError =
         (error as? MobileStorageProtectionError ?? .unsupportedState).localizedDescription
     }
+    drawingLibrary = MobileDrawingLibrary(
+      storage: PhoneDrawingLibraryFile(rootDirectory: root).storage,
+      legacy: .userDefaults(defaults))
     let profiles = FileConnectionProfileStore(directory: root)
     connection = MobileConnection(profiles: profiles, credentials: credentials) {
       origin, token, workspace in
@@ -286,7 +291,7 @@ final class PhoneAppModel {
     let created = try PhoneWorkspace(
       rootDirectory: root, structural: structural, recovery: recovery,
       profile: profile, repository: repository, drawingRepository: drawings, cache: cache,
-      captureOutbox: captures)
+      captureOutbox: captures, drawingLibrary: drawingLibrary)
     workspaces[profile.id] = created
     // Construct the offline store without opening a socket or granting mutation authority.
     // Missing credentials still permit reading saved content; pairing is handled separately.

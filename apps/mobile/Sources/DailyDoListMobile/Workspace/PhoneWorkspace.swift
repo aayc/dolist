@@ -3,6 +3,7 @@ import DailyDoListClient
 import DailyDoListDomain
 import DailyDoListDrawingModel
 import DailyDoListEditorCore
+import DailyDoListMobileDrawing
 import DailyDoListMobileKit
 import DailyDoListModels
 import DailyDoListWorkspaceCore
@@ -20,6 +21,8 @@ final class PhoneWorkspace {
   let profile: ConnectionProfile
   let repository: WorkspaceRepository
   let drawingRepository: DrawingRepository
+  /// The device's one shape library, shared by every drawing of every workspace.
+  let drawingLibrary: MobileDrawingLibrary
   var activeDrawing: DrawingSession?
   var activePath: String? { activeDrawing?.drawing.path ?? active?.note.path }
   @ObservationIgnored var drawingSessions: [String: DrawingSession] = [:]
@@ -72,7 +75,8 @@ final class PhoneWorkspace {
     rootDirectory: URL, structural: WorkspaceStructuralCoordinator, recovery: WorkspaceRecovery,
     profile: ConnectionProfile, repository: WorkspaceRepository,
     drawingRepository: DrawingRepository, cache: WorkspaceCache,
-    captureOutbox: CaptureOutbox
+    captureOutbox: CaptureOutbox,
+    drawingLibrary: MobileDrawingLibrary = MobileDrawingLibrary(storage: .memory())
   ) throws {
     self.contentCache = try WorkspaceContentCache(
       rootDirectory: rootDirectory, scope: repository.scope)
@@ -82,6 +86,7 @@ final class PhoneWorkspace {
     self.profile = profile
     self.repository = repository
     self.drawingRepository = drawingRepository
+    self.drawingLibrary = drawingLibrary
     self.cache = cache
     self.composerDrafts = PhoneComposerDrafts(cache: cache)
     self.captureOutbox = captureOutbox

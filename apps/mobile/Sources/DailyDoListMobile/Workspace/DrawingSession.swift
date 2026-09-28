@@ -29,6 +29,11 @@ final class DrawingSession {
     controller = MobileDrawingController(scene: drawing.document.scene)
     controller.isEditing = drawing.canEdit
     controller.onChange = { [weak self] _ in self?.changed() }
+    // Imports are measured as the write request the next sync sends: this file's preserved
+    // Markdown and its conditional version, not just the scene.
+    controller.importContext = { [weak self] in
+      DrawingImportContext(previous: self?.drawing.document, baseVersion: self?.drawing.baseVersion)
+    }
     controller.onInteractionEnd = { [weak self] in
       guard let self else { return }
       if let incoming = self.incomingAfterInteraction {
