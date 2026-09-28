@@ -6,8 +6,12 @@ import Foundation
 public final class CheckpointAccessLease: @unchecked Sendable {
   private let lock = NSLock()
   private var descriptor: Int32?
+  private var protection: MobileProtectionAccess?
 
-  init(_ descriptor: Int32) { self.descriptor = descriptor }
+  init(_ descriptor: Int32, protection: MobileProtectionAccess) {
+    self.descriptor = descriptor
+    self.protection = protection
+  }
 
   public func release() {
     lock.lock()
@@ -16,6 +20,7 @@ public final class CheckpointAccessLease: @unchecked Sendable {
     self.descriptor = nil
     _ = flock(descriptor, LOCK_UN)
     _ = Darwin.close(descriptor)
+    protection = nil
   }
 
   deinit { release() }
@@ -36,6 +41,7 @@ extension MarkdownCheckpointStore {
     // would let another process open a different inode and bypass the coordination barrier.
     let path = directory.deletingLastPathComponent().appendingPathComponent(
       "checkpoint-access.lock")
+    let protection = try MobileStorageProtection.access(at: path)
     let descriptor = Darwin.open(path.path, O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0o600)
     guard descriptor >= 0 else {
       throw WorkspaceRepositoryError.storage("Cannot open checkpoint coordination.")
@@ -46,11 +52,7 @@ extension MarkdownCheckpointStore {
     guard Darwin.fstat(descriptor, &info) == 0, info.st_mode & S_IFMT == S_IFREG else {
       throw WorkspaceRepositoryError.storage("Invalid checkpoint coordination file.")
     }
-    #if os(iOS)
-      try FileManager.default.setAttributes(
-        [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
-        ofItemAtPath: path.path)
-    #endif
+    try protection.mode.apply(to: path)
     let operation = (exclusive ? LOCK_EX : LOCK_SH) | (wait ? 0 : LOCK_NB)
     while flock(descriptor, operation) != 0 {
       if errno == EINTR { continue }
@@ -58,6 +60,6 @@ extension MarkdownCheckpointStore {
       throw WorkspaceRepositoryError.storage("Cannot coordinate checkpoint access.")
     }
     accepted = true
-    return CheckpointAccessLease(descriptor)
+    return CheckpointAccessLease(descriptor, protection: protection)
   }
 }

@@ -21,6 +21,31 @@ struct IntegrationTests {
     #expect(await f.center.badge == 0)
   }
 
+  @Test func lockedForegroundIntentsCannotReadCountsRouteOrQueueCaptures() async throws {
+    let f = try Fixture()
+    defer { f.remove() }
+    let service = f.service(foregroundDataAvailable: { false })
+    await #expect(throws: PhoneIntegrationError.self) { try await service.approvalCount() }
+    await #expect(throws: PhoneIntegrationError.self) { try await service.route(.today) }
+    await #expect(throws: PhoneIntegrationError.self) {
+      try await service.capture(PhoneCaptureRequest(text: "A protected synthetic capture"))
+    }
+    #expect(await f.remote.attempts.isEmpty)
+    #expect(!FileManager.default.fileExists(atPath: f.root.path))
+  }
+
+  @Test func lockingDuringAnApprovalFetchDoesNotDiscloseFreshOrCachedCounts() async throws {
+    let f = try Fixture()
+    defer { f.remove() }
+    let availability = MutableAvailability()
+    let service = f.service(foregroundDataAvailable: { await availability.available })
+    await f.remote.setApprovals([approval("synthetic-approval")])
+    await f.remote.onApprovals { await availability.lock() }
+    await #expect(throws: PhoneIntegrationError.protectedDataUnavailable) {
+      try await service.approvalCount()
+    }
+  }
+
   @Test func foregroundCacheContentionRefetchesBeforeAlerting() async throws {
     let f = try Fixture()
     defer { f.remove() }
@@ -237,7 +262,8 @@ private struct Fixture {
   func service(
     previews: Bool = false, visible: PhoneVisibleDestination = PhoneVisibleDestination(),
     enabled: Bool = true, strict: Bool = false,
-    overridePreferences: (@Sendable () async -> PhoneNotificationPreferences)? = nil
+    overridePreferences: (@Sendable () async -> PhoneNotificationPreferences)? = nil,
+    foregroundDataAvailable: @escaping @Sendable () async -> Bool = { true }
   ) -> PhoneIntegrations {
     PhoneIntegrations(
       rootDirectory: root, profiles: FakeProfiles(profile: profile), credentials: FakeCredentials(),
@@ -247,7 +273,8 @@ private struct Fixture {
           enabled: enabled, showPreviews: previews, backgroundRefresh: true,
           requiresUnlockedStorage: strict)
       }, visibleDestination: { visible }, notificationCenter: center,
-      approvalCacheFactory: { _ in inbox }, remoteFactory: { _, _ in remote })
+      approvalCacheFactory: { _ in inbox }, foregroundDataAvailable: foregroundDataAvailable,
+      remoteFactory: { _, _ in remote })
   }
 }
 private struct FakeProfiles: ConnectionProfileStore {
@@ -290,6 +317,10 @@ private actor MutablePreferences {
   var value = PhoneNotificationPreferences(enabled: true, showPreviews: true)
   func hidePreviews() { value.showPreviews = false }
 }
+private actor MutableAvailability {
+  var available = true
+  func lock() { available = false }
+}
 private actor FakeCenter: PhoneNotificationCenter {
   var sent: [PhoneNotification] = []
   var existing: Set<String> = []
@@ -330,6 +361,7 @@ private actor FakeRemote: PhoneIntegrationRemote {
   var cursors: [String?] = []
   var updates: [RoutineNotification] = []
   var approvals: [ApprovalRequest] = []
+  var approvalsHook: (@Sendable () async -> Void)?
   init(scope: WorkspaceScope) {
     self.scope = scope
     profileID = scope.profileID
@@ -339,6 +371,7 @@ private actor FakeRemote: PhoneIntegrationRemote {
   func setOffline(_ value: Bool) { offline = value }
   func setNotifications(_ value: [RoutineNotification]) { updates = value }
   func setApprovals(_ value: [ApprovalRequest]) { approvals = value }
+  func onApprovals(_ action: @escaping @Sendable () async -> Void) { approvalsHook = action }
   func identity() async throws -> RemoteWorkspaceIdentity {
     if offline { throw URLError(.notConnectedToInternet) }
     return RemoteWorkspaceIdentity(
@@ -364,6 +397,7 @@ private actor FakeRemote: PhoneIntegrationRemote {
   }
   func pendingApprovals() async throws -> [ApprovalRequest] {
     if offline { throw URLError(.notConnectedToInternet) }
+    await approvalsHook?()
     return approvals
   }
   func notifications(cursor: String?, limit: Int) async throws -> AgentNotificationsResponse {

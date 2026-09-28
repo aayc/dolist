@@ -40,8 +40,9 @@ Keychain group is used.
    call `register()` during launch, list that exact identifier in
    `BGTaskSchedulerPermittedIdentifiers`, and add `fetch` to `UIBackgroundModes`. Call `schedule()`
    after the user opts in and when the app backgrounds. It cancels scheduling when disabled or
-   `requiresUnlockedStorage` is selected. That preference must match the app's actual stricter
-   Keychain/file protection configuration; this package does not migrate storage protection.
+   `requiresUnlockedStorage` is selected. Derive it from the actual protection controller, not
+   only a saved boolean. [Storage protection](PROTECTION.md) describes the durable migration,
+   native preference and lifecycle hooks for existing files, future writes and Keychain items.
 
 Use the existing application Keychain service and storage directories. Do not create an alternate
 App Group container or copy bearer tokens into preferences, routes, notifications or SQLite.

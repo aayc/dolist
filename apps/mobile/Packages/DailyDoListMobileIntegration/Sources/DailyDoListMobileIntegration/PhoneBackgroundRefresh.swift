@@ -7,6 +7,7 @@
   @MainActor public final class PhoneBackgroundRefresh {
     public let identifier: String
     private let integrations: PhoneIntegrations
+    private var currentWork: [UUID: Task<Void, Never>] = [:]
     public init(identifier: String, integrations: PhoneIntegrations) {
       self.identifier = identifier
       self.integrations = integrations
@@ -32,8 +33,23 @@
       request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)
       try BGTaskScheduler.shared.submit(request)
     }
+    /// Quiesce before a storage-protection change; no catch-up may retain its old SQLite handle.
+    public func cancel() {
+      for work in currentWork.values { work.cancel() }
+      BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: identifier)
+    }
+
+    public func cancelAndWait() async {
+      cancel()
+      let pending = Array(currentWork.values)
+      for work in pending { await work.value }
+    }
+
     private func run(_ task: BGAppRefreshTask) {
+      for work in currentWork.values { work.cancel() }
+      let id = UUID()
       let work = Task { @MainActor [integrations] in
+        defer { currentWork.removeValue(forKey: id) }
         var success = false
         do {
           guard await integrations.backgroundRefreshAllowed() else {
@@ -45,8 +61,9 @@
           success = !Task.isCancelled
         } catch { success = false }
         task.setTaskCompleted(success: success)
-        try? await schedule()
+        if !Task.isCancelled { try? await schedule() }
       }
+      currentWork[id] = work
       task.expirationHandler = { work.cancel() }
     }
   }
