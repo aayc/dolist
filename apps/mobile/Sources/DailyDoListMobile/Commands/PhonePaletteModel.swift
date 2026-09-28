@@ -63,7 +63,7 @@ final class PhonePaletteModel {
   func select(_ index: Int) { if items.indices.contains(index) { selectedIndex = index } }
 
   func refresh() async {
-    let workspace = controller.workspace
+    guard let workspace = controller.workspace else { return }
     let epoch = workspace.generation
     do {
       let metadata = try await workspace.repository.cachedDocumentMetadata()
@@ -82,7 +82,7 @@ final class PhonePaletteModel {
     }
     searchGeneration &+= 1
     let generation = searchGeneration
-    let workspace = controller.workspace
+    guard let workspace = controller.workspace else { return }
     let epoch = workspace.generation
     searching = true
     defer { if generation == searchGeneration { searching = false } }
@@ -129,7 +129,10 @@ final class PhonePaletteModel {
     searchGeneration &+= 1
     searching = false
     selectedIndex = 0
-    let workspace = controller.workspace
+    guard let workspace = controller.workspace else {
+      items = []
+      return
+    }
     switch mode {
     case .commands:
       let commands = controller.availableCommands

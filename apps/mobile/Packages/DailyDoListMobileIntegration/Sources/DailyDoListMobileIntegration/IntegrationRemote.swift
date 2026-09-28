@@ -23,6 +23,8 @@ public struct PhoneApprovalSnapshot: Sendable {
 /// The app's existing Inbox cache supplies this adapter; cached requests never authorize decisions.
 public protocol PhoneApprovalCache: Sendable {
   func snapshot() async throws -> PhoneApprovalSnapshot?
+  /// Throws `WorkspaceRepositoryError.concurrentWrite` when a newer snapshot won; catch-up then
+  /// retries from fresh generations.
   func replacePending(_ approvals: [ApprovalRequest], replacing generation: Int64?) async throws
 }
 

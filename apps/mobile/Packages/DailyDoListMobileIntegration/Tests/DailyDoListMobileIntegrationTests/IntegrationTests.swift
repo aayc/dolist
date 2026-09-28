@@ -21,6 +21,16 @@ struct IntegrationTests {
     #expect(await f.center.badge == 0)
   }
 
+  @Test func theRealApprovalCacheReportsALostRaceTheWayCatchUpRetries() async throws {
+    let f = try Fixture()
+    defer { f.remove() }
+    let cache = try MobileInboxApprovalCache(rootDirectory: f.root, scope: f.scope)
+    try await cache.replacePending([approval("approval-1")], replacing: nil)
+    await #expect(throws: WorkspaceRepositoryError.concurrentWrite) {
+      try await cache.replacePending([], replacing: nil)
+    }
+  }
+
   @Test func lockedForegroundIntentsCannotReadCountsRouteOrQueueCaptures() async throws {
     let f = try Fixture()
     defer { f.remove() }

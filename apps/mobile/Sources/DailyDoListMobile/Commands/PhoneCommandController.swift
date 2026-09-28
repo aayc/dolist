@@ -22,7 +22,9 @@ final class PhoneCommandController {
     }
   }
   enum PathAction { case note, folder, drawing, rename, trash }
-  let workspace: PhoneWorkspace
+  /// Weak: SwiftUI and UIKit can keep a command controller (its key commands) after the
+  /// workspace is released, and a strong reference would keep every database it owns open.
+  private(set) weak var workspace: PhoneWorkspace?
   var presentation: Presentation?
   private(set) var awaitingDismissal = false
   @ObservationIgnored var isCurrent: () -> Bool
@@ -49,11 +51,12 @@ final class PhoneCommandController {
     PhoneCommand.all.filter { $0.showsInPalette && canRun($0.id) }
   }
   var editorAvailable: Bool {
-    workspace.selectedTab == 0 && workspace.active != nil && !workspace.structuralBusy
+    guard let workspace else { return false }
+    return workspace.selectedTab == 0 && workspace.active != nil && !workspace.structuralBusy
   }
 
   func canRun(_ id: PhoneCommandID) -> Bool {
-    guard isCurrent() else { return false }
+    guard isCurrent(), let workspace else { return false }
     let hasNote = workspace.activePath != nil && !workspace.structuralBusy
     let editable = editorAvailable && workspace.active?.editor.configuration.isEditable == true
     switch id {
@@ -96,7 +99,7 @@ final class PhoneCommandController {
       presentation = nil
       return true
     }
-    let workspace = self.workspace
+    guard let workspace else { return false }
     switch id {
     case .palette: presentation = .palette(.commands)
     case .quickOpen: presentation = .palette(.notes)
@@ -165,10 +168,10 @@ final class PhoneCommandController {
   }
 
   func open(_ path: String, newTab: Bool = false, line: Int? = nil) {
-    guard isCurrent(), !workspace.structuralBusy else { return }
+    guard isCurrent(), workspace?.structuralBusy == false else { return }
     let action = { [weak self] in
-      guard let self, self.isCurrent() else { return }
-      Task { await self.workspace.open(path, newTab: newTab, line: line) }
+      guard let self, self.isCurrent(), let workspace = self.workspace else { return }
+      Task { await workspace.open(path, newTab: newTab, line: line) }
     }
     if presentation != nil {
       awaitingDismissal = true
@@ -185,26 +188,29 @@ final class PhoneCommandController {
     }
     awaitingDismissal = true
     afterDismiss = { [weak self] in
-      guard let self, self.canRun(.newNote) else { return }
+      guard let self, self.canRun(.newNote), let workspace = self.workspace else { return }
       self.presentation = .path(
-        .note, query.trimmingCharacters(in: .whitespacesAndNewlines), self.workspace.generation)
+        .note, query.trimmingCharacters(in: .whitespacesAndNewlines), workspace.generation)
     }
     presentation = nil
   }
 
   func completePath(_ action: PathAction, original: String, path: String, epoch: UInt64) {
-    guard isCurrent(), workspace.generation == epoch, !workspace.structuralBusy else { return }
+    guard isCurrent(), let workspace, workspace.generation == epoch, !workspace.structuralBusy
+    else { return }
     awaitingDismissal = true
     afterDismiss = { [weak self] in
-      guard let self, self.isCurrent(), self.workspace.generation == epoch else { return }
+      guard let self, self.isCurrent(), let workspace = self.workspace,
+        workspace.generation == epoch
+      else { return }
       Task {
         switch action {
-        case .note: await self.workspace.createNote(path)
-        case .drawing: await self.workspace.createDrawing(path)
-        case .folder: await self.workspace.createFolder(path)
+        case .note: await workspace.createNote(path)
+        case .drawing: await workspace.createDrawing(path)
+        case .folder: await workspace.createFolder(path)
         case .rename:
-          await self.workspace.changeStructure(.rename(from: original, to: path, isFolder: false))
-        case .trash: await self.workspace.changeStructure(.trash(path: original, isFolder: false))
+          await workspace.changeStructure(.rename(from: original, to: path, isFolder: false))
+        case .trash: await workspace.changeStructure(.trash(path: original, isFolder: false))
         }
       }
     }
@@ -214,7 +220,7 @@ final class PhoneCommandController {
   private func tabNumber(_ id: PhoneCommandID) -> Int { Int(id.rawValue.dropFirst(4)) ?? 0 }
 
   private func updateEditor(_ id: PhoneCommandID) {
-    guard let editor = workspace.active?.editor else { return }
+    guard let editor = workspace?.active?.editor else { return }
     var value = editor.configuration
     switch id {
     case .source: value.livePreview.toggle()

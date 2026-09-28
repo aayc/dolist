@@ -107,11 +107,18 @@ extension View {
           case .path(let action, let original, let epoch):
             PhoneCommandPathView(
               controller: controller, action: action, original: original, epoch: epoch)
-          case .capture: CaptureTaskView(workspace: controller.workspace)
-          case .history: navigation { CaptureHistoryView(workspace: controller.workspace) }
-          case .recovery: navigation { PhoneRecoveryView(workspace: controller.workspace) }
+          case .capture:
+            if let workspace = controller.workspace { CaptureTaskView(workspace: workspace) }
+          case .history:
+            if let workspace = controller.workspace {
+              navigation { CaptureHistoryView(workspace: workspace) }
+            }
+          case .recovery:
+            if let workspace = controller.workspace {
+              navigation { PhoneRecoveryView(workspace: workspace) }
+            }
           case .newRoutine:
-            if let store = controller.workspace.agent {
+            if let store = controller.workspace?.agent {
               MobileNewRoutineView(
                 store: store,
                 actionsEnabled: controller.canRun(.newRoutine)
@@ -238,7 +245,7 @@ private struct PhoneCommandPathView: View {
           Text("Use a relative path inside this workspace.").font(.footnote).foregroundStyle(
             .secondary)
         }
-        if controller.workspace.generation != epoch {
+        if controller.workspace?.generation != epoch {
           Text("The connection changed. Close this form and review the command again.")
             .foregroundStyle(.orange)
         }
@@ -255,9 +262,10 @@ private struct PhoneCommandPathView: View {
             controller.completePath(action, original: original, path: path, epoch: epoch)
           }.disabled(
             path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !controller.isCurrent()
-              || controller.workspace.generation != epoch || controller.workspace.structuralBusy
+              || controller.workspace?.generation != epoch
+              || controller.workspace?.structuralBusy != false
               || ((action == .folder || action == .rename || action == .trash)
-                && !controller.workspace.online)
+                && controller.workspace?.online != true)
           )
           .accessibilityIdentifier("commands.path.save")
         }

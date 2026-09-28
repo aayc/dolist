@@ -23,6 +23,10 @@ public struct MobileInboxApprovalCache: PhoneApprovalCache {
   public func replacePending(_ approvals: [ApprovalRequest], replacing generation: Int64?)
     async throws
   {
-    _ = try await cache.replacePendingApprovals(approvals, replacing: generation)
+    do {
+      _ = try await cache.replacePendingApprovals(approvals, replacing: generation)
+    } catch WorkspaceContentCacheError.staleFetch {
+      throw WorkspaceRepositoryError.concurrentWrite
+    }
   }
 }

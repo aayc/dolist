@@ -80,7 +80,9 @@ struct PhonePaletteView: View {
     }
     .task { await model.refresh() }
     .task(
-      id: SearchKey(mode: model.mode, query: model.query, online: model.controller.workspace.online)
+      id: SearchKey(
+        mode: model.mode, query: model.query,
+        online: model.controller.workspace?.online == true)
     ) {
       await model.searchContents()
     }

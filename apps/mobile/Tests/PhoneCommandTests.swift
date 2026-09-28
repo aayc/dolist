@@ -97,6 +97,17 @@ import UIKit
     #expect(keys == [.move(1), .submit(newTab: true, create: true)])
   }
 
+  @Test func aControllerOutlivingItsViewDoesNotKeepTheWorkspaceAndItsDatabasesOpen() throws {
+    var fixture: CommandFixture? = try CommandFixture()
+    let root = try #require(fixture?.root)
+    defer { try? FileManager.default.removeItem(at: root) }
+    weak var workspace = fixture?.workspace
+    let controller = PhoneCommandController(workspace: try #require(fixture?.workspace))
+    fixture = nil
+    #expect(workspace == nil)
+    #expect(!controller.run(.today))
+  }
+
   @Test func catalogCoversEachPhoneCommandAndDoesNotAssignCollidingShortcuts() {
     #expect(Set(PhoneCommand.all.map(\.id)) == Set(PhoneCommandID.allCases))
     #expect(Set(PhoneCommand.all.map(\.id)).count == PhoneCommand.all.count)
