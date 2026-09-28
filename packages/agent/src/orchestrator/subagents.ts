@@ -133,6 +133,11 @@ interface TurnState {
   resumeFailed?: boolean;
   /** Text of the turn's final assistant message ("" when it ended with tool calls only). */
   finalText: string;
+  /**
+   * The turn's latest text message, while nothing else followed it in the thread: finish_task's
+   * summary takes its place rather than repeating the result right below it.
+   */
+  trailingText?: { id: string; createdAt: number };
   nudged: boolean;
 }
 
@@ -738,10 +743,12 @@ export class SubagentManager {
     const { board, threads, records } = this.options;
     return {
       postUpdate: ({ text, summary }) => {
+        run.turn.trailingText = undefined;
         board.postAgentText(run.taskId, run.author, text);
         if (summary) board.setSummary(run.taskId, summary);
       },
       askUser: ({ question }) => {
+        run.turn.trailingText = undefined;
         board.postAgentText(run.taskId, run.author, question);
         run.turn.askedUser = true;
         board.setStatus(run.taskId, "waiting_user", {
@@ -749,6 +756,7 @@ export class SubagentManager {
         });
       },
       createArtifact: async (input) => {
+        run.turn.trailingText = undefined;
         const meta = await threads.addArtifact(run.threadId, {
           title: input.title,
           kind: input.kind,
@@ -767,7 +775,8 @@ export class SubagentManager {
         return meta;
       },
       finish: ({ status, summary, shortSummary, changed }) => {
-        board.postAgentText(run.taskId, run.author, summary);
+        board.postAgentText(run.taskId, run.author, summary, run.turn.trailingText);
+        run.turn.trailingText = undefined;
         const mapped: TaskAgentStatus = status === "needs_user" ? "waiting_user" : status;
         run.turn.finishStatus = mapped;
         if (changed !== undefined) run.turn.changed = changed;
@@ -832,21 +841,26 @@ export class SubagentManager {
           if (stream?.posted) this.finalizeStream(run, stream, stream.text.trim());
           return;
         }
+        const posted = {
+          id: stream?.id ?? createId("msg"),
+          createdAt: stream?.createdAt ?? this.now(),
+        };
+        run.turn.trailingText = posted;
         if (stream?.posted) this.finalizeStream(run, stream, text);
         else {
           threads.upsertMessage(run.threadId, {
-            id: stream?.id ?? createId("msg"),
+            ...posted,
             kind: "text",
             role: "agent",
             author: run.author,
             text,
-            createdAt: stream?.createdAt ?? this.now(),
           });
         }
         return;
       }
       case "tool_start":
         if (!THREAD_TOOL_NAMES.has(event.toolName)) {
+          run.turn.trailingText = undefined;
           threads.upsertMessage(run.threadId, run.tools.start(event));
         }
         return;

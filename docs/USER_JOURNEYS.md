@@ -18,7 +18,8 @@ sections 1–3).
 4. Clicking the ✦ or the badge opens the task's thread. Hovering the link previews the page (title,
    site, snippet) from what the agent read.
 
-The agent's sub-bullet never counts as a new request.
+The agent's sub-bullet never counts as a new request, or as an edit of the task: only lines you
+write under a task reach its agent. The result is posted in the thread once.
 
 Tests: `packages/agent/test/journeys/living-list.test.ts` (J1), `test/scenarios/live.test.ts`,
 `apps/web/e2e/living-list.spec.ts`, Mac `LivingListTests` / `AgentLineTests`.

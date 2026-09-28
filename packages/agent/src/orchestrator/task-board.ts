@@ -120,19 +120,27 @@ export class TaskBoard {
     return thread;
   }
 
-  /** Posts an agent message to the task's thread and counts it as unread. */
-  postAgentText(taskId: string, author: MessageAuthor, text: string): TextMessage {
+  /**
+   * Posts an agent message to the task's thread and counts it as unread; with `replacing`, it
+   * takes that message's place instead (already counted).
+   */
+  postAgentText(
+    taskId: string,
+    author: MessageAuthor,
+    text: string,
+    replacing?: { id: string; createdAt: number },
+  ): TextMessage {
     const thread = this.ensureThread(taskId);
     const message: TextMessage = {
-      id: createId("msg"),
+      id: replacing?.id ?? createId("msg"),
       kind: "text",
       role: "agent",
       author,
       text,
-      createdAt: this.now(),
+      createdAt: replacing?.createdAt ?? this.now(),
     };
     this.threads.upsertMessage(thread.id, message);
-    this.records.bumpUnread(taskId);
+    if (!replacing) this.records.bumpUnread(taskId);
     return message;
   }
 

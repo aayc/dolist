@@ -116,12 +116,49 @@ describe("steering and resuming", () => {
     );
     const record = await t.waitForStatus(task, "done");
     expect(record.summary).toBe("Updated");
-    expect(t.texts(task)).toContain("Got it — Only ones with a crank handle");
     expect(t.kickoffs()).toHaveLength(1);
     const last = t.brain.decisions.filter((d) => d.role === "subagent").at(-1)!;
     expect(
       last.request.messages.some((m) => m.role === "tool" && m.name === "create_artifact"),
     ).toBe(true);
+  });
+});
+
+describe("reporting back", () => {
+  const task = "Research best standing desks under $500";
+  const summary = "Top pick: Desk A at $480.";
+  const finish = {
+    name: "finish_task",
+    arguments: { status: "done", summary, shortSummary: "Desk A" },
+  };
+
+  it("posts the result once when the subagent writes it out right before finishing", async () => {
+    const t = await fakeRuntime();
+    t.brain.when(
+      subagentFor(task),
+      { text: "Desk A is the best at $480.", toolCalls: [finish] },
+      { times: 1 },
+    );
+    await t.writeDailyNote([`- [ ] ${task}`]);
+    await t.waitForStatus(task, "done");
+    expect(t.texts(task).filter((text) => text.includes("Desk A"))).toEqual([summary]);
+  });
+
+  it("keeps what the subagent said before a step the user sees", async () => {
+    const t = await fakeRuntime();
+    t.brain
+      .when(
+        subagentFor(task),
+        {
+          text: "Checking your notes first.",
+          toolCalls: [{ name: "search_notes", arguments: { query: "desk" } }],
+        },
+        { times: 1 },
+      )
+      .when(subagentFor(task), { toolCalls: [finish] }, { times: 1 });
+    await t.writeDailyNote([`- [ ] ${task}`]);
+    await t.waitForStatus(task, "done");
+    expect(t.texts(task).slice(-2)).toEqual(["Checking your notes first.", summary]);
   });
 });
 
