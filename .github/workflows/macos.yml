@@ -152,6 +152,16 @@ jobs:
           # shellcheck disable=SC2086
           apps/macos/scripts/test.sh $PACKAGES
 
+      - name: Crash reports
+        # A test process that crashes (not a failed expectation) leaves only its report's stack.
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: crash-reports-${{ matrix.group }}
+          path: ~/Library/Logs/DiagnosticReports/*.ips
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Smoke-test ddl-computer
         if: matrix.group == 'others'
         # The debug build the tests made; the release job checks the one bundled in the app.
