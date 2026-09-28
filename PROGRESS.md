@@ -8,7 +8,8 @@ them, so work can continue on any machine at any point. Read it before starting;
 paired with the other development Mac, whose bundled daemon is now `67a488b` (quit-sync fix
 integrated on `main` as `cf1807c`). Real remote-task, approval, artifact, reboot, bidirectional
 handover and app-close/reopen checks passed.
-The main development Mac's installation remains `401997a`.
+The main development Mac's installation is `eed5999e` (reinstalled 2026-09-28; permissions and
+app control survived, agent live).
 The full native iPhone implementation plan is also on `main` (`40e1b29`); the user has now
 authorized implementation and thorough simulator testing in its separate task.
 
