@@ -19,9 +19,12 @@ public struct FoundationRecoveryFileSystem: RecoveryFileSystem {
     }
     try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: false)
     do {
+      try MobileStorageProtectionMode.whileUnlocked.apply(to: staging)
       for directory in ["markdown", "binary"] {
         try FileManager.default.createDirectory(
           at: staging.appendingPathComponent(directory), withIntermediateDirectories: false)
+        try MobileStorageProtectionMode.whileUnlocked.apply(
+          to: staging.appendingPathComponent(directory))
       }
     } catch {
       try? FileManager.default.removeItem(at: staging)
@@ -49,7 +52,7 @@ public struct FoundationRecoveryFileSystem: RecoveryFileSystem {
     guard !FileManager.default.fileExists(atPath: target.path) else {
       throw WorkspaceMaintenanceError.invalidExportDestination
     }
-    try data.write(to: target, options: .atomic)
+    try data.write(to: target, options: MobileStorageProtectionMode.whileUnlocked.writingOptions)
     let handle = try FileHandle(forWritingTo: target)
     defer { try? handle.close() }
     try handle.synchronize()

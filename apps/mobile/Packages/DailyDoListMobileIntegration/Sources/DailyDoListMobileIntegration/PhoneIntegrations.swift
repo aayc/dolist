@@ -2,6 +2,10 @@ import DailyDoListMobileKit
 import DailyDoListModels
 import Foundation
 
+#if os(iOS)
+  import UIKit
+#endif
+
 /// Shared by foreground UI, App Intents and the optional short background refresh. Every invocation
 /// binds a verified profile before it touches the durable workspace namespace or a remote host.
 public actor PhoneIntegrations {
@@ -9,6 +13,8 @@ public actor PhoneIntegrations {
     @Sendable (WorkspaceScope, String) throws -> any PhoneIntegrationRemote
   public typealias ApprovalCacheFactory =
     @Sendable (WorkspaceScope) throws -> any PhoneApprovalCache
+  let prepareStorage: @Sendable () async throws -> Void
+  let foregroundDataAvailable: @Sendable () async -> Bool
   let rootDirectory: URL
   let profiles: any ConnectionProfileStore
   let credentials: any ConnectionCredentials
@@ -30,10 +36,20 @@ public actor PhoneIntegrations {
     },
     notificationCenter: any PhoneNotificationCenter,
     approvalCacheFactory: @escaping ApprovalCacheFactory,
+    prepareStorage: @escaping @Sendable () async throws -> Void = {},
+    foregroundDataAvailable: @escaping @Sendable () async -> Bool = {
+      #if os(iOS)
+        await MainActor.run { UIApplication.shared.isProtectedDataAvailable }
+      #else
+        true
+      #endif
+    },
     remoteFactory: @escaping RemoteFactory = {
       try HTTPPhoneIntegrationRemote(scope: $0, token: $1)
     }
   ) {
+    self.prepareStorage = prepareStorage
+    self.foregroundDataAvailable = foregroundDataAvailable
     self.rootDirectory = rootDirectory
     self.profiles = profiles
     self.credentials = credentials
@@ -51,7 +67,9 @@ public actor PhoneIntegrations {
   }
 
   public func capture(_ request: PhoneCaptureRequest) async throws -> PhoneCaptureResult {
+    try await requireForegroundAccess()
     let scope = try await selectedScope()
+    try await requireForegroundAccess()
     let outbox = try CaptureOutbox(rootDirectory: rootDirectory, scope: scope)
     _ = try await outbox.enqueue(
       text: request.text, capturedAt: request.capturedAt, timeZone: request.timeZone,
@@ -67,6 +85,7 @@ public actor PhoneIntegrations {
     guard let saved = try await outbox.capture(request.id) else {
       throw PhoneIntegrationError.notConfigured
     }
+    try await requireForegroundAccess()
     let status: PhoneCaptureResult.Status
     switch saved.state {
     case .applied: status = .added
@@ -79,7 +98,10 @@ public actor PhoneIntegrations {
   }
 
   public func route(_ destination: PhoneRoute.Destination) async throws -> PhoneRoute {
-    PhoneRoute(scope: try await selectedScope(), destination: destination)
+    try await requireForegroundAccess()
+    let scope = try await selectedScope()
+    try await requireForegroundAccess()
+    return PhoneRoute(scope: scope, destination: destination)
   }
 
   public func parseRoute(_ url: URL) async throws -> PhoneRoute {
@@ -87,6 +109,7 @@ public actor PhoneIntegrations {
   }
 
   public func approvalCount() async throws -> ApprovalCountResult {
+    try await requireForegroundAccess()
     let scope = try await selectedScope()
     let cache = try approvalCacheFactory(scope)
     let saved = try await cache.snapshot()
@@ -96,20 +119,31 @@ public actor PhoneIntegrations {
       let approvals = try await remote.pendingApprovals()
       try await ensureCurrent(scope)
       try await cache.replacePending(approvals, replacing: saved?.generation)
+      try await requireForegroundAccess()
       return ApprovalCountResult(
         count: approvals.filter(\.isPending).count, cachedAt: nil, isCached: false)
     } catch {
       try Task.checkCancellation()
       try await ensureCurrent(scope)
+      try await requireForegroundAccess()
       guard let current = try await cache.snapshot(), let fetched = current.fetchedAt else {
         throw error
       }
+      try await requireForegroundAccess()
       return ApprovalCountResult(
         count: current.approvals.filter(\.isPending).count, cachedAt: fetched, isCached: true)
     }
   }
 
+  private func requireForegroundAccess() async throws {
+    guard await foregroundDataAvailable() else {
+      throw PhoneIntegrationError.protectedDataUnavailable
+    }
+  }
+
   func selectedScope() async throws -> WorkspaceScope {
+    try await prepareStorage()
+    try Task.checkCancellation()
     let all = try await profiles.profiles()
     let selected = await selectedProfile()
     let profile =

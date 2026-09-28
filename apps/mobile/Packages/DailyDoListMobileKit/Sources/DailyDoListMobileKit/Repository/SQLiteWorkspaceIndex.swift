@@ -6,6 +6,7 @@ import SQLite3
 public final class SQLiteWorkspaceIndex: WorkspaceIndex, @unchecked Sendable {
   let database: OpaquePointer
   let lock = NSLock()
+  private let protection: MobileProtectionAccess
 
   public convenience init(url: URL, scope: WorkspaceScope) throws {
     try self.init(url: url, scope: scope, allowForgotten: false)
@@ -17,12 +18,15 @@ public final class SQLiteWorkspaceIndex: WorkspaceIndex, @unchecked Sendable {
     guard !scope.workspaceID.isEmpty, !scope.hostID.isEmpty else {
       throw WorkspaceRepositoryError.invalidScope
     }
-    try FileManager.default.createDirectory(
-      at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    protection = try MobileStorageProtection.access(at: url)
+    try MobileStorageProtection.createDirectory(
+      url.deletingLastPathComponent(), mode: protection.mode)
     var handle: OpaquePointer?
     guard
       sqlite3_open_v2(
-        url.path, &handle, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nil)
+        url.path, &handle,
+        SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX
+          | protection.mode.sqliteFlags, nil)
         == SQLITE_OK,
       let handle
     else {
@@ -79,9 +83,7 @@ public final class SQLiteWorkspaceIndex: WorkspaceIndex, @unchecked Sendable {
         for suffix in ["", "-wal", "-shm"] {
           let path = url.path + suffix
           if FileManager.default.fileExists(atPath: path) {
-            try FileManager.default.setAttributes(
-              [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
-              ofItemAtPath: path)
+            try protection.mode.apply(to: URL(fileURLWithPath: path))
           }
         }
       #endif
@@ -209,6 +211,7 @@ public final class SQLiteWorkspaceIndex: WorkspaceIndex, @unchecked Sendable {
   public func isForgotten() throws -> Bool {
     lock.lock()
     defer { lock.unlock() }
+    try protection.checkAvailable()
     let forgotten: Bool? = try read("metadata", keyColumn: "key", key: "forgotten")
     return forgotten == true
   }
@@ -239,6 +242,7 @@ public final class SQLiteWorkspaceIndex: WorkspaceIndex, @unchecked Sendable {
   func locked<T>(_ action: () throws -> T) throws -> T {
     lock.lock()
     defer { lock.unlock() }
+    try protection.checkAvailable()
     let forgotten: Bool? = try read("metadata", keyColumn: "key", key: "forgotten")
     guard forgotten != true else { throw WorkspaceRepositoryError.workspaceForgotten }
     return try action()

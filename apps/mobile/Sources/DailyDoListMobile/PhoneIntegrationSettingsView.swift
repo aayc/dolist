@@ -3,6 +3,7 @@ import SwiftUI
 
 struct PhoneIntegrationSettingsView: View {
   @Bindable var model: PhoneAppModel
+  var storageProtection: PhoneStorageProtectionController? = nil
   var body: some View {
     Form {
       Section {
@@ -13,13 +14,19 @@ struct PhoneIntegrationSettingsView: View {
         }
         Toggle("Show task and routine previews", isOn: preference(\.showPreviews))
         Toggle("Background refresh", isOn: preference(\.backgroundRefresh))
-          .disabled(!model.notificationPreferences.enabled)
+          .disabled(
+            !model.notificationPreferences.enabled
+              || storageProtection?.permitsBackgroundRefresh == false
+              || model.notificationPreferences.requiresUnlockedStorage)
       } header: {
         Text("On this iPhone")
       } footer: {
         Text(
           "Previews are hidden by default. Alerts arrive when this iPhone receives updates. iOS chooses when background refresh runs; alerts may wait until you reopen the app."
         )
+      }
+      if let storageProtection {
+        PhoneStorageProtectionSection(controller: storageProtection)
       }
       if let error = model.notificationError {
         Section { Text(error).foregroundStyle(.secondary) }
@@ -34,7 +41,13 @@ struct PhoneIntegrationSettingsView: View {
         .font(.footnote).foregroundStyle(.secondary)
       }
     }
-    .navigationTitle("Notifications and Siri")
+    .navigationTitle("Privacy and notifications")
+    .onChange(of: storageProtection?.permitsBackgroundRefresh) { _, permitted in
+      guard let permitted else { return }
+      var preferences = model.notificationPreferences
+      preferences.requiresUnlockedStorage = !permitted
+      Task { await model.updateNotificationPreferences(preferences) }
+    }
   }
   private func preference(_ keyPath: WritableKeyPath<PhoneNotificationPreferences, Bool>)
     -> Binding<Bool>

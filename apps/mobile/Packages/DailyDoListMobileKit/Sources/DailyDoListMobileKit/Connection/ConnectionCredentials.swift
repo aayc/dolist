@@ -10,9 +10,7 @@ public protocol ConnectionCredentials: Sendable {
 /// No iCloud synchronization or shared access group. Protected data failures remain errors;
 /// they must never be mistaken for revocation or silently erase a profile's offline drafts.
 public actor KeychainConnectionCredentials: ConnectionCredentials {
-  public enum Protection: Sendable {
-    case afterFirstUnlock, whileUnlocked
-  }
+  public typealias Protection = MobileStorageProtectionMode
   public struct KeychainError: LocalizedError, Sendable {
     public let status: OSStatus
     public var errorDescription: String? {
@@ -27,7 +25,7 @@ public actor KeychainConnectionCredentials: ConnectionCredentials {
     }
   }
   private let service: String
-  private let protection: Protection
+  private var protection: Protection
 
   public init(
     service: String = "app.dailydolist.iphone.connections",
@@ -69,6 +67,26 @@ public actor KeychainConnectionCredentials: ConnectionCredentials {
     } else if status != errSecSuccess {
       throw KeychainError(status: status)
     }
+  }
+
+  /// Updates only accessibility attributes in this app's existing non-synchronizing service.
+  /// Tokens are never exported, deleted/reinserted, or copied into settings during migration.
+  public func setProtection(_ value: Protection) throws {
+    let query: [String: Any] = [
+      kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: service,
+      kSecAttrSynchronizable as String: false,
+    ]
+    let attributes = [
+      kSecAttrAccessible as String: value == .afterFirstUnlock
+        ? kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        : kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+    ]
+    let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+    guard status == errSecSuccess || status == errSecItemNotFound else {
+      throw KeychainError(status: status)
+    }
+    protection = value
   }
 
   public func remove(_ profile: UUID) throws {

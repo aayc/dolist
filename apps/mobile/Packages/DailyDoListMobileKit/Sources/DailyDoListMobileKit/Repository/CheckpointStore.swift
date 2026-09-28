@@ -22,7 +22,9 @@ public struct MarkdownCheckpointStore: NoteCheckpointStore {
 
   public init(directory: URL) throws {
     self.directory = directory
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let access = try MobileStorageProtection.access(at: directory)
+    defer { withExtendedLifetime(access) {} }
+    try MobileStorageProtection.createDirectory(directory, mode: access.mode)
   }
 
   public func put(_ content: String) throws -> String {
@@ -36,12 +38,8 @@ public struct MarkdownCheckpointStore: NoteCheckpointStore {
         throw WorkspaceRepositoryError.corruptCheckpoint
       }
     } else {
-      #if os(iOS)
-        try data.write(
-          to: target, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
-      #else
-        try data.write(to: target, options: .atomic)
-      #endif
+      let protection = try MobileStorageProtection.access(at: target)
+      try data.write(to: target, options: protection.mode.writingOptions)
     }
     // A prior attempt may have created this file but failed during synchronization. Existing
     // content must establish durability too before its reference can be acknowledged.
