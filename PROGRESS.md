@@ -4,7 +4,7 @@ The running handoff log: what shipped, what's in flight, what's next, and the de
 them, so work can continue on any machine at any point. Read it before starting; keep it current
 (the rules are in `AGENTS.md`, "Handoff log").
 
-**Last updated:** 2026-09-28 (evening: models per role installed; agent swarm streams A/B/C building) · The existing Linux VM runs the remote Cursor agent on `09e13dc`,
+**Last updated:** 2026-09-28 (evening: models per role installed; agent swarm streams paused) · The existing Linux VM runs the remote Cursor agent on `09e13dc`,
 paired with the other development Mac, whose bundled daemon is now `67a488b` (quit-sync fix
 integrated on `main` as `cf1807c`). Real remote-task, approval, artifact, reboot, bidirectional
 handover and app-close/reopen checks passed.
@@ -107,12 +107,14 @@ is still granted. Never kill Daily Do List processes by name; never bind or kill
 
 ## In flight
 
-- **Agent swarm (2026-09-28 evening), spec `docs/specs/agent-swarm.md`:** the wire shapes are on
-  `main` (`35dc8e26`: `workstream` and `helpers` on records, `workstream` on threads). Three
-  streams build in their own worktrees and branches: A (agent core: shared board, workstreams,
-  fan-out helpers, demo vault, docs), B (web: note status header, working-line shimmer, helper
-  badge, inbox workstream groups) and C (the same on the Mac). The lead reviews and merges A
-  first, then B and C, extends the web e2e with A's mock brain, and installs.
+- **Agent swarm (2026-09-28 evening), spec `docs/specs/agent-swarm.md`: paused (the user stopped
+  all three streams at 17:09).** The wire shapes are on `main` (`35dc8e26`). Nothing is merged.
+  Worktrees under `../assistant-worktrees/`: `feat/agent-swarm-a` (agent core) has one commit (the
+  board format and workstreams on records, specs and threads) and about 800 lines of uncommitted,
+  untested work (board and helper tools, digest, kickoff, mock brain); `feat/agent-swarm-web` has
+  its four features in three commits and an unfinished `apps/web/e2e/presence.spec.ts`, full checks
+  not run; `feat/agent-swarm-mac` has its four features and docs in five commits, clean, `test.sh
+  DailyDoListEditor` and `app` green. Ask the user before resuming or merging any of them.
 
 - **iPhone, continued after the transfer (2026-09-27 evening):** a second agent took over
   `codex/iphone-app` and integrated every open stream: bounded search, strict storage protection
