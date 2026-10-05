@@ -16,8 +16,8 @@
   "dependencies": {
     "@ddl/core": "workspace:*",
     "@hono/node-server": "^2.1.1",
-    "hono": "^4.13.8",
-    "ws": "^8.21.3",
+    "hono": "^4.13.10",
+    "ws": "^8.22.0",
     "zod": "catalog:"
   },
   "devDependencies": {

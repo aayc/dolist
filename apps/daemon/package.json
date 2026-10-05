@@ -26,10 +26,10 @@
     "@earendil-works/pi-coding-agent": "catalog:",
     "@hono/node-server": "^2.1.1",
     "@modelcontextprotocol/sdk": "catalog:",
-    "hono": "^4.13.8",
+    "hono": "^4.13.10",
     "playwright-core": "catalog:",
     "typebox": "catalog:",
-    "ws": "^8.21.3",
+    "ws": "^8.22.0",
     "zod": "catalog:"
   },
   "devDependencies": {
