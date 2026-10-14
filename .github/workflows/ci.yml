@@ -192,7 +192,7 @@ jobs:
         run: node scripts/bench-check.mjs
       - name: Upload results
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bench-results
           path: |
@@ -239,7 +239,7 @@ jobs:
         run: pnpm turbo run e2e --filter=@ddl/web -- "--shard=$SHARD"
       - name: Upload report
         if: ${{ failure() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report-functional-${{ matrix.shard }}
           path: |
@@ -283,7 +283,7 @@ jobs:
         run: node .github/scripts/perf-summary.mjs
       - name: Upload perf report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report-perf
           path: |
@@ -348,7 +348,7 @@ jobs:
         run: node .github/scripts/eval-summary.mjs
       - name: Upload results
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: eval-results-mock
           path: evals/eval-results/
