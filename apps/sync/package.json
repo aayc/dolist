@@ -15,13 +15,13 @@
   },
   "dependencies": {
     "@ddl/core": "workspace:*",
-    "@hono/node-server": "^2.1.1",
-    "hono": "^4.13.8",
-    "ws": "^8.21.3",
+    "@hono/node-server": "^2.1.5",
+    "hono": "^4.13.13",
+    "ws": "^8.22.0",
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@types/ws": "^8.18.1",
+    "@types/ws": "^8.18.2",
     "esbuild": "^0.28.2",
     "tsx": "^4.23.15"
   }
